@@ -72,25 +72,25 @@ def create_callback(service):
         Args:
             message: The Pub/Sub message to process.
         """
-        with callback_lock:  # Ensure only one thread executes this block
-            print(f"Received Pub/Sub message: {message.data.decode('utf-8')}")
-            message.ack()  # Acknowledge the message
+        
+        print(f"Received Pub/Sub message: {message.data.decode('utf-8')}")
+        message.ack()  # Acknowledge the message
 
-            try:
-                notification = json.loads(message.data.decode('utf-8'))
-                pubsub_history_id = int(notification['historyId'])
+        try:
+            notification = json.loads(message.data.decode('utf-8'))
+            pubsub_history_id = int(notification['historyId'])
 
-                # Ignore older or already processed historyId
-                if pubsub_history_id <= int(config.get_last_history_id):
-                    print(f"Ignoring older or already processed historyId: {pubsub_history_id}")
-                    return
+            # Ignore older or already processed historyId
+            if pubsub_history_id <= int(config.get_last_history_id):
+                print(f"Ignoring older or already processed historyId: {pubsub_history_id}")
+                return
 
-                # Process new emails starting from the last_history_id
-                process_new_emails(service, config.get_last_history_id)
+            # Process new emails starting from the last_history_id
+            process_new_emails(service, config.get_last_history_id)
 
-                # Update the last_history_id after processing
-                config.set_last_history_id(pubsub_history_id)
+            # Update the last_history_id after processing
+            config.set_last_history_id(pubsub_history_id)
 
-            except Exception as e:
-                print(f"Error processing message: {e}")
+        except Exception as e:
+            print(f"Error processing message: {e}")
     return callback
