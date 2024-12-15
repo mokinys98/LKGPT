@@ -15,7 +15,7 @@ def setup_watch(service, topic_name):
     print("Watch setup successful:", response)
     return response
 
-def listen_for_notifications_with_service_account(subscription_name, sacredentials, service):
+def listen_for_notifications_with_service_account(subscription_name, key_path, service):
     """
     Listens for Pub/Sub notifications on a given subscription and processes them using a callback function.
 
@@ -27,8 +27,11 @@ def listen_for_notifications_with_service_account(subscription_name, sacredentia
     This function sets up a subscriber client to listen for messages on the specified Pub/Sub subscription.
     It continuously listens for incoming messages and processes them using the specified callback function.
     """
+    from google.oauth2 import service_account as sa_credentials
+
     # Initialize the Pub/Sub subscriber client with the provided credentials
-    subscriber = pubsub_v1.SubscriberClient(credentials=sacredentials)
+    credentials = sa_credentials.Credentials.from_service_account_file(key_path)
+    subscriber = pubsub_v1.SubscriberClient(credentials=credentials)
 
     # Construct the fully qualified subscription path
     subscription_path = subscriber.subscription_path('skilful-mercury-444620-s6', subscription_name)
@@ -77,16 +80,19 @@ def create_callback(service):
         message.ack()  # Acknowledge the message
 
         try:
+            # Retrieve the last processed history ID
+            last_history_id = config.get_last_history_id()
+
             notification = json.loads(message.data.decode('utf-8'))
             pubsub_history_id = int(notification['historyId'])
 
             # Ignore older or already processed historyId
-            if pubsub_history_id <= int(config.get_last_history_id):
+            if pubsub_history_id <= int(last_history_id):
                 print(f"Ignoring older or already processed historyId: {pubsub_history_id}")
                 return
 
             # Process new emails starting from the last_history_id
-            process_new_emails(service, config.get_last_history_id)
+            process_new_emails(service, last_history_id)
 
             # Update the last_history_id after processing
             config.set_last_history_id(pubsub_history_id)

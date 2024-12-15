@@ -40,6 +40,7 @@ def get_label_id(service, label_name):
     return None
 
 def change_email_label(service, message_id, remove_labels, add_labels):
+    print("change_email_label " + message_id)
     """
     Modifies the labels of an email.
 

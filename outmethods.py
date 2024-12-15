@@ -37,7 +37,7 @@ def save_message_to_file_as_json(msg):
 
 def write_json_data_to_json(JSON_Body):
 
-    Subject = JSON_Body['subject']
+    Subject = JSON_Body['Subject']
 
     # Folder and file paths
     folder_name = "emails"

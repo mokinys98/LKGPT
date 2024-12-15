@@ -23,4 +23,10 @@ def set_last_history_id(new_value):
     print(f"Set last_history_id to: {new_value}")
 
 def get_last_history_id():
-    return last_history_id
+    global last_history_id
+    try:
+        # Ensure last_history_id is a number
+        return int(last_history_id)
+    except (ValueError, TypeError):
+        # Handle cases where last_history_id is not a valid number
+        raise ValueError("last_history_id must be a valid integer.")
