@@ -21,7 +21,11 @@ from dotenv import find_dotenv, load_dotenv
 import markdown2
 from email.mime.text import MIMEText
 import base64
+import ssl
 
+print(ssl.OPENSSL_VERSION)
+ssl_context = ssl.create_default_context()
+ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
 
 load_dotenv(find_dotenv())
 # Replace with your OpenAI API key
@@ -188,6 +192,7 @@ def setup_watch(service, topic_name):
     last_history_id = response.get('historyId')
     print("Watch setup successful:", response)
     return response
+
 def create_callback(service):
     def callback(message):
         global last_history_id
@@ -198,6 +203,7 @@ def create_callback(service):
         notification = json.loads(message.data.decode('utf-8'))
         pubsub_history_id = int(notification['historyId'])
 
+        # Zinutes kurios ateina   ///    Nuo Watch pasijungimo
         if pubsub_history_id <= int(last_history_id):
             print(f"Ignoring older or already processed historyId: {pubsub_history_id}")
             return
@@ -219,33 +225,53 @@ def listen_for_notifications_with_service_account(subscription_name, key_path, s
     subscriber.subscribe(subscription_path, callback=callback)
 
     while True:
-        time.sleep(5)
+        time.sleep(60)
+
 def process_new_emails(service, history_id):
-    print(f"Processing new emails starting with historyId: {history_id}")
+    print(f"Processing new emails starting with historyId: {last_history_id}")
 
     try:
         # Call the Gmail API to list history
-        response = service.users().history().list(userId='me', startHistoryId=history_id).execute() # Gauna sarašąs pagal historyId
+        response = service.users().history().list(userId='me', startHistoryId=last_history_id).execute() # Gauna sarašąs pagal historyId
 
         if 'historyId' not in response:
             print("No history records found in the response.")
             return
         
         new_messages = []
+        processed_message_ids = set()
         if 'history' in response: # Jei response'je yra history
             for record in response['history']:
                 if 'messages' in record:
                     for message in record['messages']:
-                        full_message = service.users().messages().get(userId='me', id=message['id']).execute()
-                        new_messages.append(full_message)
-                        write_to_OPENAI(full_message)
+                        # Skip already processed messages
+                        if message['id'] in processed_message_ids:
+                            print(f"Skipping already processed message ID: {message['id']}")
+                            continue
 
+                        full_message = service.users().messages().get(userId='me', id=message['id']).execute()
+                        processed_message_ids.add(message['id'])
+                        
+
+                        # Check if the message is sent by the bot
+                        headers = full_message['payload']['headers']
+                        sender = get_header_value(headers, "From")
+                        if "***REMOVED***" in sender:
+                            print(f"Skipping email sent by the bot: {sender}")
+                            continue
+
+
+                        labels = full_message.get('labelIds', [])
+                        if 'INBOX' in labels:
+                            new_messages.append(full_message)
+                            print(f"Formuojama nauja užklausa į OPENAI")
+                            write_to_OPENAI(full_message)
+
+        update_last_history_id(response['historyId'])
         if new_messages:
             print("\nNew Emails Received:")
             format_and_display_emails_table(new_messages)
-            update_last_history_id(response['historyId'])
-        else:
-            print("No new emails found in the history records.")
+
     except Exception as e:
         print(f"Error processing new emails: {e}")
 
@@ -254,6 +280,7 @@ def process_new_emails(service, history_id):
 def update_last_history_id(new_value):
     global last_history_id
     last_history_id = new_value
+    print(f"Updated last_history_id to: {new_value}")
 def set_a_global_user(user):
     global global_user
     global_user = user
@@ -338,31 +365,60 @@ def write_to_OPENAI(msg):
     #pirmiausiai pasirasem sau i |JSON| faila
     write_to_json(ID, From, Date, Subject, body)
 
-
-    # OpenAI API rašymas
+    # Skip emails sent by the bot
+    if "***REMOVED***" in From:
+        print(f"Skipping email sent by the bot: {From}")
+        return
+    
     try:
-        completion = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {
-            "role": "user",
-            "content": body
-        }
-            ]
-        )
-       
-        total_tokens = completion.usage.total_tokens
+        result = call_openai_with_retry(prompt=body, max_retries=3, wait_time=5)
+        total_tokens = result.usage.total_tokens
         approx_cost_usd = float(total_tokens / 1000) * 0.03  # Assuming a cost of $0.03 per 1000 tokens
-        response = completion.choices[0].message.content
-
+        response = result.choices[0].message.content
         email_body = create_markdown_email_body(total_tokens, approx_cost_usd, response)
-        send_html_email(global_user, "***REMOVED***", From, Subject, email_body)
-        change_email_label(global_user, ID, ["UNREAD"], ["Executed"])
+        print(f"Siunciame laiska i {extract_email(From)} tema: {Subject}, ")
+        send_html_email(global_user, "***REMOVED***", extract_email(From), Subject, email_body)
+        change_email_label(global_user, ID, ["UNREAD"], ["Label_7380834898592995778"])
 
-    except Exception as e:
-        print(f"Error sending email: {e}")
+    except OpenAI.error.Timeout as e:
+        print("Request timed out.")
+    except OpenAI.error.RateLimitError as e:
+        print("Rate limit exceeded.")
 
+def call_openai_with_retry(prompt, max_retries=3, wait_time=5):
+    """
+    Calls OpenAI's API with a retry mechanism.
+
+    Args:
+        prompt (str): The input prompt for OpenAI.
+        max_retries (int): Maximum number of retries in case of failure.
+        wait_time (int): Wait time (in seconds) between retries.
+
+    Returns:
+        str: The response from OpenAI.
+    """
+    for attempt in range(max_retries):
+        try:
+            print(f"Attempt {attempt + 1}...")
+            # Call OpenAI API
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            # If the call succeeds, return the response
+            return response
+
+        except Exception as e:
+            print(f"Error: {e}")
+            if attempt < max_retries - 1:
+                print(f"Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            else:
+                print("Max retries reached. Returning failure.")
+                raise  # Re-raise the exception after max retries
 
 # Funkcija sukurti el. laiško turinį Markdown formatu ir konvertuoti į HTML
 def create_markdown_email_body(total_tokens, approx_cost_usd, response):
@@ -420,24 +476,11 @@ def send_html_email(service, sender, recipient, subject, html_content):
     try:
         # Siųskite el. laišką
         sent_message = service.users().messages().send(userId="me", body=body).execute()
-        print(f"El. laiškas sėkmingai išsiųstas! Žinutės ID: {sent_message['id']}")
+        print(f"El. laiškas sėkmingai išsiųstas! Žinutės ID: {sent_message['id']}, siuntėjas: {sender}, gavėjas: {extract_email(recipient)}, tema: {subject}")
         return sent_message
     except Exception as e:
         print(f"Klaida siunčiant el. laišką: {e}")
         return None
-
-
-def create_message(sender, to, subject, body_text):
-    message = f"From: {sender}\nTo: {to}\nSubject: {subject}\n\n{body_text}"
-    raw_message = base64.urlsafe_b64encode(message.encode('utf-8')).decode('utf-8')
-    return {'raw': raw_message}
-
-def send_email(service, sender, to, subject, body_text):
-    #Sukurs laisko turini
-    message = create_message(sender, to, subject, body_text)
-    #issiunia laiska
-    sent_message = service.users().messages().send(userId='me', body=message).execute()
-    print(f"Message sent: {sent_message['id']}")
 
 def write_to_json(ID, From, Date, Subject, body):
 
@@ -524,6 +567,28 @@ def change_email_label(service, message_id, remove_labels, add_labels):
         print(f"Error modifying email labels: {e}")
         return None
 
+def get_all_labels(service):
+    """
+    Retrieves all labels from the user's inbox.
+
+    Args:
+        service: Authorized Gmail API service instance.
+
+    Returns:
+        list: A list of labels in the user's inbox.
+    """
+    try:
+        labels = service.users().labels().list(userId="me").execute().get("labels", [])
+        print("Labels retrieved:")
+        for label in labels:
+            print(f"ID: {label['id']}, Name: {label['name']}")
+        return labels
+    except Exception as e:
+        print(f"Error retrieving labels: {e}")
+        return []
+
+
+
 if __name__ == '__main__':
     # Authenticate and read emails
     User = authenticate_gmail_as_User()
@@ -532,6 +597,7 @@ if __name__ == '__main__':
     '''
     read_emails(User)
     '''
+    #get_all_labels(User)
     
     # Path to the service account key file
     service_account_key_path = "C:/Users/Auris/Python/LKGPT/skilful-mercury-444620-s6-2526f9ed3422.json"

@@ -5,3 +5,11 @@
 temp/
 
 .env
+
+/emails
+
+token.json
+
+skilful-mercury-444620-s6-2526f9ed3422.json
+
+credentials.json
