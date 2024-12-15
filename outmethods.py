@@ -37,11 +37,13 @@ def save_message_to_file_as_json(msg):
 
 def write_json_data_to_json(JSON_Body):
 
+    # Clean the subject to remove "RE:", "FWD:", or similar prefixes
     Subject = JSON_Body['Subject']
+    cleaned_subject = Subject.split(':', 1)[-1].strip() if ':' in Subject else Subject
 
     # Folder and file paths
     folder_name = "emails"
-    file_name = Subject +".json"
+    file_name = cleaned_subject +".json"
     file_path = os.path.join(folder_name, file_name)
 
     # Ensure the folder exists

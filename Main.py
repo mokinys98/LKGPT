@@ -45,21 +45,9 @@ def process_new_emails(service, history_id):
                 if 'messagesAdded' in record:
                     for message in record['messagesAdded']:
 
-                        # Skip already processed messages
-                        if message['message']['id'] in processed_message_ids:
-                            print(f"Skipping already processed message ID: {message['message']['id']}")
-                            continue
-
-                        #Check if the message is with LABEL DRAFT
-                        labels = message['message']['labelIds']
-                        if 'DRAFT' in labels:
-                            print(f"Skipping draft message ID: {message['message']['id']}")
-                            continue
-
-                        #Check if the message is with LABEL SENT
-                        labels = message['message']['labelIds']
-                        if 'SENT' in labels:
-                            print(f"Skipping sent message ID: {message['message']['id']}")
+                        # Skip already processed messages or messages with DRAFT or SENT labels
+                        if message['message']['id'] in processed_message_ids or 'DRAFT' in message['message']['labelIds'] or 'SENT' in message['message']['labelIds']:
+                            print(f"Skipping already processed, draft or sent message ID: {message['message']['id']}")
                             continue
 
                         #Check if the message contains INBOX and UNREAD labels
@@ -132,6 +120,7 @@ def message_handler(msg):
     # Default fallback if no body is found
     body = body if 'body' in locals() else "No content found"
 
+    # Prepare JSON data from the message
     json_data = message_to_json_data(ID, From, Date, Subject, body) 
 
     #pirmiausiai pasirasem sau i |JSON| faila
@@ -157,11 +146,6 @@ def write_to_OPENAI(Json_Data):
     Date = Json_Data["Date"]
     Subject = Json_Data["Subject"]
     body = Json_Data["Body"]
-
-    # Skip emails sent by the bot
-    if "***REMOVED***" in From:
-        print(f"Skipping email sent by the bot: {From}")
-        return
     
     try:
         result = call_openai_with_retry(prompt=body, max_retries=3, wait_time=5)
@@ -177,6 +161,13 @@ def write_to_OPENAI(Json_Data):
             send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(From), subject=Subject, html_content=email_body)
             change_email_label(User, ID, ["UNREAD"], ["Label_7380834898592995778"])
             update_sender_statistics(sender_email=extract_email(From), cost=approx_cost_usd)
+
+            # ~~~~~~~~~~~ JSON ~~~~~~~~~~~
+            # Prepare JSON data from the message
+            json_data = message_to_json_data(ID, "***REMOVED***", Date, Subject, email_body) 
+            #pirmiausiai pasirasem sau i |JSON| faila
+            write_json_data_to_json(json_data)
+
         except Exception as e:
             print(f"Error sending email: {e}")
 
