@@ -5,10 +5,11 @@ from outmethods import write_json_data_to_json
 from openai_integration import call_openai_with_retry
 
 from Email_processing import format_and_display_emails_table, read_emails
-from Email_send_to import send_html_email, create_markdown_email_body
+from Email_send_to import send_html_email, create_markdown_email_body, create_greeting_email
 from Email_labels import get_all_labels, change_email_label
 import config
 import utils
+from sqldb import initialize_database, update_sender_statistics, sender_exists, create_entry
 
 from google.cloud import pubsub_v1
 
@@ -64,6 +65,29 @@ def process_new_emails(service, history_id):
                         #Check if the message contains INBOX and UNREAD labels
                         full_message = service.users().messages().get(userId='me', id=message['message']['id']).execute()
                         labels = full_message.get('labelIds', [])
+
+                        # #Checks if Subject is Saskaita
+                        # if 'Saskaita' in full_message['subject']:
+                        #     send_bill_email(service, full_message)
+
+
+                        headers = full_message['payload']['headers']
+                        From = get_header_value(headers, "From")
+                        sender_email = extract_email(From)
+                        bool = sender_exists(sender_email)
+                        if bool:
+                            print(f"Sender exists in the database: {sender_email}")
+                        else:
+                            print(f"Sender does not exist in the database: {sender_email}")
+                            email_body = create_greeting_email()
+                            try:
+                                User = config.get_global_user()   
+                                send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(sender_email), subject="Sveiki!", html_content=email_body)
+                                create_entry(sender_email)
+                                continue
+                            except Exception as e:
+                                print(f"Error sending email: {e}")
+                                continue
                         
                         if 'INBOX' in labels and 'UNREAD' in labels:
                             processed_message_ids.add(message['message']['id'])
@@ -148,9 +172,13 @@ def write_to_OPENAI(Json_Data):
         email_body = create_markdown_email_body(total_tokens, approx_cost_usd, response)
         print(f"Siunciame laiska i {extract_email(From)} tema: {Subject}, ")
 
-        User = config.get_global_user()   
-        send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(From), subject=Subject, html_content=email_body)
-        change_email_label(User, ID, ["UNREAD"], ["Label_7380834898592995778"])
+        try:
+            User = config.get_global_user()   
+            send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(From), subject=Subject, html_content=email_body)
+            change_email_label(User, ID, ["UNREAD"], ["Label_7380834898592995778"])
+            update_sender_statistics(sender_email=extract_email(From), cost=approx_cost_usd)
+        except Exception as e:
+            print(f"Error sending email: {e}")
 
     except OpenAI.error.Timeout as e:
         print("Request timed out.")
@@ -159,6 +187,8 @@ def write_to_OPENAI(Json_Data):
 
 
 if __name__ == '__main__':
+    #init
+    initialize_database()
     # Authenticate and read emails
     User = authenticate_gmail_as_User()
     config.set_a_global_user(User)
@@ -168,17 +198,9 @@ if __name__ == '__main__':
     #get_all_labels(User)
     
     # Path to the service account key file
-    service_account_key_path = "C:/Users/Auris/Python/LKGPT/skilful-mercury-444620-s6-2526f9ed3422.json"
+    service_account_key_path = "C:/Users/Auris/Python/LKGPT/Creds/skilful-mercury-444620-s6-2526f9ed3422.json"
     # Authenticate Gmail API
     service_account = authenticate_gmail_with_service_account(service_account_key_path)
-
-    # service = User
-    # response = service.users().history().list(
-    #         userId='me',
-    #         startHistoryId=15000,
-    #         historyTypes=['messageAdded']  # Focus on added messages
-    #     ).execute()
-    # print(response)
 
     # Example usage:
     setup_watch(User, "projects/skilful-mercury-444620-s6/topics/LK-DI")

@@ -5,6 +5,31 @@ from email.mime.text import MIMEText
 from utils import extract_email
 
 
+#Markdown template of user bill
+def create_bill_email(debt):
+    markdown_body = f"""
+# API Atsakymo Informacija
+
+- **Isiskolinimas**: {debt:.5f}
+- **Limitas**: ${'0.50€'}
+---
+    """
+    # Konvertuojame Markdown į HTML
+    return markdown2.markdown(markdown_body, extras=["fenced-code-blocks"])
+
+#Markdown template for a new user greeting
+def create_greeting_email():
+    markdown_body = f"""
+# Sveiki!
+
+- **Informacija ruosiama**
+---
+    """
+    # Konvertuojame Markdown į HTML
+    return markdown2.markdown(markdown_body, extras=["fenced-code-blocks"])
+
+
+
 # Funkcija sukurti el. laiško turinį Markdown formatu ir konvertuoti į HTML
 def create_markdown_email_body(total_tokens, approx_cost_usd, response):
     #print(f"Sukuria el. laiško turinį Markdown formatu, konvertuoja jį į HTML.")
@@ -69,7 +94,7 @@ def send_html_email(service, sender, recipient, subject, html_content):
         return sent_message
     except Exception as e:
         print(f"Klaida siunčiant el. laišką: {e}")
-        return None
+        return Exception
          
 
 if __name__ == '__main__':

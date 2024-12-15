@@ -18,17 +18,17 @@ def authenticate_gmail_as_User():
     """
     creds = None
     # Check if token.json exists for stored credentials
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    if os.path.exists('Creds/token.json'):
+        creds = Credentials.from_authorized_user_file('Creds/token.json', SCOPES)
     # If there are no valid credentials, prompt the user to log in
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file('Creds/credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
         # Save credentials for future runs
-        with open('token.json', 'w') as token:
+        with open('Creds/token.json', 'w') as token:
             token.write(creds.to_json())
 
     # Build the Gmail API service

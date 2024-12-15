@@ -75,7 +75,7 @@ def create_callback(service):
         Args:
             message: The Pub/Sub message to process.
         """
-        
+        print(f"-------------------------------------------------------------------------")
         print(f"Received Pub/Sub message: {message.data.decode('utf-8')}")
         message.ack()  # Acknowledge the message
 
