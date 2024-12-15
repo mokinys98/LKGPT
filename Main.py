@@ -172,8 +172,10 @@ if __name__ == '__main__':
     setup_watch(User, "projects/skilful-mercury-444620-s6/topics/LK-DI")
     # Start listening for notifications
     listen_for_notifications_with_service_account(
-        subscription_name="LK-DI-sub",
-        key_path=service_account_key_path,
-        service=User
-    )
+         subscription_name="LK-DI-sub",
+         key_path=service_account_key_path,
+         service=User
+     )
+
+    
     

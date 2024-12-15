@@ -1,12 +1,14 @@
 import base64
 import markdown2
+
 from email.mime.text import MIMEText
 from utils import extract_email
 
 
 # Funkcija sukurti el. laiško turinį Markdown formatu ir konvertuoti į HTML
 def create_markdown_email_body(total_tokens, approx_cost_usd, response):
-    print(f"Sukuria el. laiško turinį Markdown formatu, konvertuoja jį į HTML.")
+    #print(f"Sukuria el. laiško turinį Markdown formatu, konvertuoja jį į HTML.")
+
     """
     Sukuria el. laiško turinį Markdown formatu, konvertuoja jį į HTML.
     Args:
@@ -19,19 +21,19 @@ def create_markdown_email_body(total_tokens, approx_cost_usd, response):
     """
     # Markdown turinys
     markdown_body = f"""
-    # API Atsakymo Informacija
+# API Atsakymo Informacija
 
-    - **Naudoti tokenai**: {total_tokens}
-    - **Apskaičiuota kaina**: ${approx_cost_usd:.5f}
+- **Naudoti tokenai**: {total_tokens}
+- **Apskaičiuota kaina**: ${approx_cost_usd:.5f}
 
-    ---
+---
 
-    ## Atsakymas
+## Atsakymas
 
-    {response}
+{response}
     """
     # Konvertuojame Markdown į HTML
-    return markdown2.markdown(markdown_body)
+    return markdown2.markdown(markdown_body, extras=["fenced-code-blocks"])
 
 # Funkcija siųsti HTML el. laišką
 def send_html_email(service, sender, recipient, subject, html_content):
@@ -49,6 +51,7 @@ def send_html_email(service, sender, recipient, subject, html_content):
     Returns:
         dict: Gmail API atsakymas.
     """
+
     # Sukurkite MIMEText objektą su HTML turiniu
     message = MIMEText(html_content, "html")
     message["to"] = extract_email(recipient)
@@ -68,3 +71,7 @@ def send_html_email(service, sender, recipient, subject, html_content):
         print(f"Klaida siunčiant el. laišką: {e}")
         return None
          
+
+if __name__ == '__main__':
+    html = create_markdown_email_body(339, 0.01017, "testas")
+    print(html)
