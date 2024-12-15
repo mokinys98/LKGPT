@@ -2,6 +2,7 @@ import base64
 import markdown2
 
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from utils import extract_email
 
 
@@ -26,8 +27,6 @@ def create_greeting_email():
 
     # Konvertuojame Markdown į HTML
     return markdown2.markdown(markdown_body, extras=["fenced-code-blocks"])
-
-
 
 # Funkcija sukurti el. laiško turinį Markdown formatu ir konvertuoti į HTML
 def create_markdown_email_body(total_tokens, approx_cost_usd, response):
@@ -60,10 +59,10 @@ def create_markdown_email_body(total_tokens, approx_cost_usd, response):
     return markdown2.markdown(markdown_body, extras=["fenced-code-blocks"])
 
 # Funkcija siųsti HTML el. laišką
-def send_html_email(service, sender, recipient, subject, html_content):
+def send_html_email(service, sender, recipient, subject, html_content, thread_id=None, in_reply_to=None, references=None):
     print(f"Sending email...")
     """
-    Siunčia HTML formatu paruoštą el. laišką per Gmail API.
+    Siunčia HTML formatu paruoštą el. laišką per Gmail API, su threading laukais.
 
     Args:
         service: Autorizuotas Gmail API paslaugų objektas.
@@ -71,6 +70,9 @@ def send_html_email(service, sender, recipient, subject, html_content):
         recipient (str): Gavėjo el. pašto adresas.
         subject (str): Laiško tema.
         html_content (str): Laiško turinys HTML formatu.
+        thread_id (str): Esamo Gmail thread ID (jei norite susieti su esamu pokalbiu).
+        in_reply_to (str): Pradinio laiško Message-ID (jei tai atsakymas).
+        references (str): References laukelis (nurodo visų ankstesnių laiškų ID).
 
     Returns:
         dict: Gmail API atsakymas.
@@ -82,9 +84,21 @@ def send_html_email(service, sender, recipient, subject, html_content):
     message["from"] = sender
     message["subject"] = subject
 
+     # Pridėkite threading laukus, jei jie pateikti
+    if in_reply_to:
+        message["In-Reply-To"] = in_reply_to
+    if references:
+        message["References"] = references
+
     # Kodavimas į Base64, kaip reikalauja Gmail API
     raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
-    body = {"raw": raw_message}
+    body = {
+        "raw": raw_message,
+    }
+
+    # Jei thread_id pateiktas, pridėkite jį į kūną
+    if thread_id:
+        body["threadId"] = thread_id
 
     try:
         # Siųskite el. laišką

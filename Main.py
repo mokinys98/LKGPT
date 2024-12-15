@@ -93,13 +93,16 @@ def process_new_emails(service, history_id):
 
 def message_handler(msg):
     ID = msg['id']
+    ThreadId = msg['threadId']
     headers = msg['payload']['headers']
 
     # Dynamically fetch headers
     Date = get_header_value(headers, "Date")
     From = get_header_value(headers, "From")
     Subject = get_header_value(headers, "Subject")
- 
+    In_Reply_To = get_header_value(headers, "In-Reply-To")
+    References = get_header_value(headers, "References")
+
     # Decode the body dynamically
     if 'parts' in msg['payload']:
         # Handle multipart emails
@@ -121,17 +124,20 @@ def message_handler(msg):
     body = body if 'body' in locals() else "No content found"
 
     # Prepare JSON data from the message
-    json_data = message_to_json_data(ID, From, Date, Subject, body) 
+    json_data = message_to_json_data(ID=ID, ThreadID=ThreadId, From=From, Date=Date, Subject=Subject, body=body, In_Reply_To=In_Reply_To, References=References) 
 
     #pirmiausiai pasirasem sau i |JSON| faila
     write_json_data_to_json(json_data)
 
     return json_data
 
-def message_to_json_data(ID, From, Date, Subject, body):
+def message_to_json_data(ID, From, Date, Subject, body, ThreadID = None, In_Reply_To=None, References=None):
 
     JSON_Body = {
         "ID": ID,
+        "ThreadID": ThreadID,
+        "In_Reply_To": In_Reply_To,
+        "References": References,
         "From": From,
         "Date": Date,
         "Subject": Subject,
@@ -142,10 +148,14 @@ def message_to_json_data(ID, From, Date, Subject, body):
 
 def write_to_OPENAI(Json_Data):
     ID = Json_Data["ID"]
+    ThreadID = Json_Data["ThreadID"]
+    In_Reply_To = Json_Data["In_Reply_To"]
+    References = Json_Data["References"]
     From = Json_Data["From"]
     Date = Json_Data["Date"]
     Subject = Json_Data["Subject"]
     body = Json_Data["Body"]
+    
     
     try:
         result = call_openai_with_retry(prompt=body, max_retries=3, wait_time=5)
@@ -158,13 +168,14 @@ def write_to_OPENAI(Json_Data):
 
         try:
             User = config.get_global_user()   
-            send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(From), subject=Subject, html_content=email_body)
+            send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(From), subject=Subject, html_content=email_body,
+                             thread_id=ThreadID, in_reply_to=In_Reply_To, references=References)
             change_email_label(User, ID, ["UNREAD"], ["Label_7380834898592995778"])
             update_sender_statistics(sender_email=extract_email(From), cost=approx_cost_usd)
 
             # ~~~~~~~~~~~ JSON ~~~~~~~~~~~
             # Prepare JSON data from the message
-            json_data = message_to_json_data(ID, "***REMOVED***", Date, Subject, email_body) 
+            json_data = message_to_json_data(ID=ID, ThreadID=ThreadID, From="***REMOVED***", Date=Date, Subject=Subject, body=email_body, In_Reply_To=In_Reply_To, References=References) 
             #pirmiausiai pasirasem sau i |JSON| faila
             write_json_data_to_json(json_data)
 
