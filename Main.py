@@ -27,7 +27,11 @@ def process_new_emails(service, history_id):
 
     try:
         # Call the Gmail API to list history
-        response = service.users().history().list(userId='me', startHistoryId=history_id).execute() # Gauna sarašąs pagal historyId
+        response = service.users().history().list(
+            userId='me',
+            startHistoryId=history_id,
+            historyTypes=['messageAdded']
+            ).execute() # Gauna sarašąs pagal historyId
 
         if 'historyId' not in response:
             print("No history records found in the response.")
@@ -167,6 +171,14 @@ if __name__ == '__main__':
     service_account_key_path = "C:/Users/Auris/Python/LKGPT/skilful-mercury-444620-s6-2526f9ed3422.json"
     # Authenticate Gmail API
     service_account = authenticate_gmail_with_service_account(service_account_key_path)
+
+    # service = User
+    # response = service.users().history().list(
+    #         userId='me',
+    #         startHistoryId=15000,
+    #         historyTypes=['messageAdded']  # Focus on added messages
+    #     ).execute()
+    # print(response)
 
     # Example usage:
     setup_watch(User, "projects/skilful-mercury-444620-s6/topics/LK-DI")

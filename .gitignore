@@ -8,8 +8,11 @@ temp/
 
 /emails
 
-token.json
+/__pycache__
 
 skilful-mercury-444620-s6-2526f9ed3422.json
 
 credentials.json
+
+token.json
+__pycache__/Main.cpython-312.pyc
