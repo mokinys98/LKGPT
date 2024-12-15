@@ -186,8 +186,8 @@ if __name__ == '__main__':
 
     #read_emails(User)
     #get_all_labels(User)
-    html = create_greeting_email()
-    send_html_email(service=User, sender="***REMOVED***", recipient="aurimas.zvirb@gmail.com", subject="Testas", html_content=html)
+    #html = create_greeting_email()
+    #send_html_email(service=User, sender="***REMOVED***", recipient="aurimas.zvirb@gmail.com", subject="Testas", html_content=html)
     
     # Path to the service account key file
     service_account_key_path = "C:/Users/Auris/Python/LKGPT/Creds/skilful-mercury-444620-s6-2526f9ed3422.json"
