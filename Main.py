@@ -35,29 +35,34 @@ def process_new_emails(service, history_id):
         
         new_messages = []
         processed_message_ids = set()
-        if 'history' in response: # Jei response'je yra history
+        if 'history' in response: 
             for record in response['history']:
-                if 'messages' in record:
-                    for message in record['messages']:
+                if 'messagesAdded' in record:
+                    for message in record['messagesAdded']:
+
                         # Skip already processed messages
-                        if message['id'] in processed_message_ids:
-                            print(f"Skipping already processed message ID: {message['id']}")
+                        if message['message']['id'] in processed_message_ids:
+                            print(f"Skipping already processed message ID: {message['message']['id']}")
                             continue
 
-                        full_message = service.users().messages().get(userId='me', id=message['id']).execute()
-                        processed_message_ids.add(message['id'])
-                        
-
-                        # Check if the message is sent by the bot
-                        headers = full_message['payload']['headers']
-                        sender = get_header_value(headers, "From")
-                        if "***REMOVED***" in sender:
-                            print(f"Skipping email sent by the bot: {sender}")
+                        #Check if the message is with LABEL DRAFT
+                        labels = message['message']['labelIds']
+                        if 'DRAFT' in labels:
+                            print(f"Skipping draft message ID: {message['message']['id']}")
                             continue
 
+                        #Check if the message is with LABEL SENT
+                        labels = message['message']['labelIds']
+                        if 'SENT' in labels:
+                            print(f"Skipping sent message ID: {message['message']['id']}")
+                            continue
 
+                        #Check if the message contains INBOX and UNREAD labels
+                        full_message = service.users().messages().get(userId='me', id=message['message']['id']).execute()
                         labels = full_message.get('labelIds', [])
-                        if 'INBOX' in labels:
+                        
+                        if 'INBOX' in labels and 'UNREAD' in labels:
+                            processed_message_ids.add(message['message']['id'])
                             new_messages.append(full_message)
                             print(f"Formuojama nauja užklausa į OPENAI")
                             json_data = message_handler(full_message)
@@ -139,8 +144,9 @@ def write_to_OPENAI(Json_Data):
         email_body = create_markdown_email_body(total_tokens, approx_cost_usd, response)
         print(f"Siunciame laiska i {extract_email(From)} tema: {Subject}, ")
 
-        send_html_email(service=utils.global_user, sender="***REMOVED***", recipient=extract_email(From), subject=Subject, html_content=email_body)
-        change_email_label(utils.global_user, ID, ["UNREAD"], ["Label_7380834898592995778"])
+        User = config.get_global_user()   
+        send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(From), subject=Subject, html_content=email_body)
+        change_email_label(User, ID, ["UNREAD"], ["Label_7380834898592995778"])
 
     except OpenAI.error.Timeout as e:
         print("Request timed out.")
@@ -167,7 +173,7 @@ if __name__ == '__main__':
     # Start listening for notifications
     listen_for_notifications_with_service_account(
         subscription_name="LK-DI-sub",
-        sacredentials=service_account,
+        key_path=service_account_key_path,
         service=User
     )
     
