@@ -19,12 +19,11 @@ def create_bill_email(debt):
 
 #Markdown template for a new user greeting
 def create_greeting_email():
-    markdown_body = f"""
-# Sveiki!
 
-- **Informacija ruosiama**
----
-    """
+    #Read info from .md file
+    with open("Md files/Greeting.md", "r", encoding="utf-8") as file:
+        markdown_body = file.read()
+
     # Konvertuojame Markdown į HTML
     return markdown2.markdown(markdown_body, extras=["fenced-code-blocks"])
 
@@ -98,5 +97,8 @@ def send_html_email(service, sender, recipient, subject, html_content):
          
 
 if __name__ == '__main__':
-    html = create_markdown_email_body(339, 0.01017, "testas")
+    #html = create_markdown_email_body(339, 0.01017, "testas")
+    html = create_greeting_email()
     print(html)
+
+    
