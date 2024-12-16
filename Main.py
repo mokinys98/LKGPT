@@ -188,6 +188,46 @@ def write_to_OPENAI(Json_Data):
         print("Rate limit exceeded.")
 
 
+def test(User):
+    response = User.users().history().list(
+            userId='me',
+            startHistoryId=17893,
+            historyTypes=['messageAdded']
+            ).execute() # Gauna sarašąs pagal historyId
+    Meg_arr = []
+    for record in response['history']:
+        for message in record['messagesAdded']:
+            message['message']['id']
+            #print(message['message']['id'])
+            msg = User.users().messages().get(userId='me', id=message['message']['id']).execute()
+            Meg_arr.append(msg)
+            
+
+    #Create a function to evaluate and compare the headers of all mesages
+    def extract_headers(messages):
+        headers_dict = {}
+        for msg in messages:
+            for header in msg['payload']['headers']:
+                if header['name'] not in headers_dict:
+                    headers_dict[header['name']] = []
+                headers_dict[header['name']].append(header['value'])
+    
+        return headers_dict
+    
+    #check if the sender is aurimas.zvirblys@mil.lt
+    def check_sender(messages, target_email="Aurimas.Zvirblys@mil.lt"):
+        matching_messages = []
+        for msg in messages:
+            headers = msg['payload']['headers']
+            From = get_header_value(headers, "From")
+            sender_email = extract_email(From)
+            if sender_email == target_email:
+                matching_messages.append(msg)
+        return matching_messages
+
+    #matching_messages = check_sender(Meg_arr)
+    #print(Meg_arr)
+
 if __name__ == '__main__':
     #init
     initialize_database()
@@ -200,6 +240,11 @@ if __name__ == '__main__':
     #html = create_greeting_email()
     #send_html_email(service=User, sender="***REMOVED***", recipient="aurimas.zvirb@gmail.com", subject="Testas", html_content=html)
     
+    test(User)
+    
+    from TestingFunctions import process_specific_email
+    process_specific_email(User, 18000, 18244)
+
     # Path to the service account key file
     service_account_key_path = "C:/Users/Auris/Python/LKGPT/Creds/skilful-mercury-444620-s6-2526f9ed3422.json"
     # Authenticate Gmail API
@@ -211,7 +256,7 @@ if __name__ == '__main__':
     listen_for_notifications_with_service_account(
          subscription_name="LK-DI-sub",
          key_path=service_account_key_path,
-         service=User
+         Userservice=User
      )
 
     

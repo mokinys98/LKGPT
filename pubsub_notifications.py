@@ -15,7 +15,7 @@ def setup_watch(service, topic_name):
     print("Watch setup successful:", response)
     return response
 
-def listen_for_notifications_with_service_account(subscription_name, key_path, service):
+def listen_for_notifications_with_service_account(subscription_name, key_path, Userservice):
     """
     Listens for Pub/Sub notifications on a given subscription and processes them using a callback function.
 
@@ -37,7 +37,7 @@ def listen_for_notifications_with_service_account(subscription_name, key_path, s
     subscription_path = subscriber.subscription_path('skilful-mercury-444620-s6', subscription_name)
 
     # Create the callback function to handle incoming messages
-    callback = create_callback(service)
+    callback = create_callback(Userservice)
 
     # Start listening for messages on the specified subscription
     print(f"Listening for messages on {subscription_path}...")
@@ -50,7 +50,7 @@ def listen_for_notifications_with_service_account(subscription_name, key_path, s
 # Lock for synchronizing callback execution
 callback_lock = threading.Lock()
 
-def create_callback(service):
+def create_callback(Userservice):
     """
     Creates a callback function for the Pub/Sub subscriber.
 
@@ -92,7 +92,7 @@ def create_callback(service):
                 return
 
             # Process new emails starting from the last_history_id
-            process_new_emails(service, last_history_id)
+            process_new_emails(Userservice, last_history_id)
 
             # Update the last_history_id after processing
             config.set_last_history_id(pubsub_history_id)
