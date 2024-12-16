@@ -234,16 +234,10 @@ if __name__ == '__main__':
     # Authenticate and read emails
     User = authenticate_gmail_as_User()
     config.set_a_global_user(User)
-
-    #read_emails(User)
-    #get_all_labels(User)
-    #html = create_greeting_email()
-    #send_html_email(service=User, sender="***REMOVED***", recipient="aurimas.zvirb@gmail.com", subject="Testas", html_content=html)
     
-    test(User)
-    
-    from TestingFunctions import process_specific_email
-    process_specific_email(User, 18000, 18244)
+    #test(User)
+    #from TestingFunctions import process_specific_email
+    #process_specific_email(User, 18000, 18244)
 
     # Path to the service account key file
     service_account_key_path = "C:/Users/Auris/Python/LKGPT/Creds/skilful-mercury-444620-s6-2526f9ed3422.json"
