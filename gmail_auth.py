@@ -26,7 +26,12 @@ def authenticate_gmail_as_User():
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file('Creds/credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
+            #creds = flow.run_local_server(port=0)
+            auth_url, _ = flow.authorization_url()
+            print(f"Please visit this URL to authorize the application: {auth_url}")
+            code = input("Enter the authorization code: ")
+            creds = flow.fetch_token(code=code)
+
         # Save credentials for future runs
         with open('Creds/token.json', 'w') as token:
             token.write(creds.to_json())
