@@ -20,15 +20,27 @@ def authenticate_gmail_as_User():
     # Check if token.json exists for stored credentials
     if os.path.exists('Creds/token.json'):
         creds = Credentials.from_authorized_user_file('Creds/token.json', SCOPES)
+
     # If there are no valid credentials, prompt the user to log in
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            # Initialize the flow using the client_secrets.json
             flow = InstalledAppFlow.from_client_secrets_file('Creds/credentials.json', SCOPES)
-            creds = flow.run_console(port=0)
 
-        # Save credentials for future runs
+            # Generate the authorization URL
+            auth_url, _ = flow.authorization_url(prompt='consent')
+            print(f"Please visit this URL to authorize the application: {auth_url}")
+
+            # Ask the user to input the authorization code
+            code = input("Enter the authorization code: ")
+
+            # Fetch the token using the authorization code
+            flow.fetch_token(code=code)
+            creds = flow.credentials
+
+        # Save the credentials for future runs
         with open('Creds/token.json', 'w') as token:
             token.write(creds.to_json())
 
