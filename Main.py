@@ -1,3 +1,4 @@
+import os
 from gmail_auth import authenticate_gmail_as_User, authenticate_gmail_with_service_account
 from pubsub_notifications import setup_watch, listen_for_notifications_with_service_account
 from utils import extract_email, get_header_value, decode_message
@@ -240,7 +241,7 @@ if __name__ == '__main__':
     #process_specific_email(User, 18000, 18244)
 
     # Path to the service account key file
-    service_account_key_path = "../LKGPT/Creds/skilful-mercury-444620-s6-2526f9ed3422.json"
+    service_account_key_path = os.path.join("Creds", "skilful-mercury-444620-s6-2526f9ed3422.json")
     # Authenticate Gmail API
     service_account = authenticate_gmail_with_service_account(service_account_key_path)
 

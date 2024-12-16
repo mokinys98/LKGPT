@@ -22,7 +22,7 @@ def create_bill_email(debt):
 def create_greeting_email():
 
     #Read info from .md file
-    with open("Md files/Greeting.md", "r", encoding="utf-8") as file:
+    with open("Mdfiles/Greeting.md", "r", encoding="utf-8") as file:
         markdown_body = file.read()
 
     # Konvertuojame Markdown į HTML
