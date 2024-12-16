@@ -29,6 +29,9 @@ def authenticate_gmail_as_User():
             # Initialize the flow using the client_secrets.json
             flow = InstalledAppFlow.from_client_secrets_file('Creds/credentials.json', SCOPES)
 
+            # Explicitly set the redirect_uri
+            flow.redirect_uri = 'http://localhost:8080'
+
             # Generate the authorization URL
             auth_url, _ = flow.authorization_url(prompt='consent')
             print(f"Please visit this URL to authorize the application: {auth_url}")
