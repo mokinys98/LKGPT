@@ -2,6 +2,7 @@ import os
 import uvicorn
 import ssl
 import config
+import threading
 
 from gmail_auth import authenticate_gmail_as_User, authenticate_gmail_with_service_account
 from pubsub_notifications import setup_watch, listen_for_notifications_with_service_account
@@ -65,9 +66,19 @@ def process_new_emails(service, history_id):
                 if 'messagesAdded' in record:
                     for message in record['messagesAdded']:
 
-                        # Skip already processed messages or messages with DRAFT or SENT labels
-                        if message['message']['id'] in processed_message_ids or 'DRAFT' in message['message']['labelIds'] or 'SENT' in message['message']['labelIds']:
-                            print(f"Skipping already processed, draft or sent message ID: {message['message']['id']}")
+                        # Skip already processed messages
+                        if message['message']['id'] in processed_message_ids:
+                            print(f"Skipping already processed message ID: {message['message']['id']}")
+                            continue
+
+                        # Skip messages with DRAFT labels
+                        if 'DRAFT' in message['message']['labelIds']:
+                            print(f"Skipping draft message ID: {message['message']['id']}")
+                            continue
+
+                        # Skip messages with SENT labels
+                        if 'SENT' in message['message']['labelIds']:
+                            print(f"Skipping sent message ID: {message['message']['id']}")
                             continue
 
                         #Check if the message contains INBOX and UNREAD labels
@@ -111,10 +122,13 @@ def process_new_emails(service, history_id):
     except Exception as e:
         print(f"Error processing new emails: {e}")
 
-def message_handler(msg):
-    ID = msg['id']
-    ThreadId = msg['threadId']
-    headers = msg['payload']['headers']
+def message_handler(message):
+    # Fetch full message data using Gmail API
+    payload = message.get('payload', {})
+
+    ID = message['id']
+    ThreadId = message['threadId']
+    headers = payload.get('headers', [])
 
     # Dynamically fetch headers
     Date = get_header_value(headers, "Date")
@@ -123,45 +137,82 @@ def message_handler(msg):
     In_Reply_To = get_header_value(headers, "In-Reply-To")
     References = get_header_value(headers, "References")
 
-    # Decode the body dynamically
-    if 'parts' in msg['payload']:
-        # Handle multipart emails
-        for part in msg['payload']['parts']:
-            if part['mimeType'] == 'text/html':  # Prioritize HTML
-                body_encoded = part['body']['data']
-                body = decode_message(body_encoded)
-                break
-            elif part['mimeType'] == 'text/plain':  # Fallback to plain text
-                body_encoded = part['body']['data']
-                body = decode_message(body_encoded)
-    else:
-        # Handle single-part emails
-        if 'body' in msg['payload'] and 'data' in msg['payload']['body']:
-            body_encoded = msg['payload']['body']['data']
-            body = decode_message(body_encoded)
+    # Outlook conversion headers
+    Message_ID = get_header_value(headers, "Message-ID")
+    Thread_Index = get_header_value(headers, "Thread-Index")
+    Thread_Topic = get_header_value(headers, "Thread-Topic")
+
+    # Decode the body and attachments dynamically
+    body, attachments = decode_parts(payload, decode_message)
+
+    # Default fallback if no body is found
+    body = body if body else "No content found"
 
     # Default fallback if no body is found
     body = body if 'body' in locals() else "No content found"
 
     # Prepare JSON data from the message
-    json_data = message_to_json_data(ID=ID, ThreadID=ThreadId, From=From, Date=Date, Subject=Subject, body=body, In_Reply_To=In_Reply_To, References=References) 
+    json_data = message_to_json_data(ID=ID, ThreadID=ThreadId, From=From, Date=Date, Subject=Subject, body=body, In_Reply_To=In_Reply_To, References=References, 
+                                     Message_ID=Message_ID, Thread_Index=Thread_Index, Thread_Topic=Thread_Topic)
 
-    #pirmiausiai pasirasem sau i |JSON| faila
+    # Output attachments if needed
+    if attachments:
+        json_data['attachments'] = attachments 
+
+    #pirmiausiai pasirasem sau i JSON faila
     write_json_data_to_json(json_data)
 
     return json_data
 
-def message_to_json_data(ID, From, Date, Subject, body, ThreadID = None, In_Reply_To=None, References=None):
+def decode_parts(payload, part_decoder):
+    body = None
+    attachments = []
+
+    # Function to recursively decode parts
+    def process_part(part):
+        nonlocal body
+
+        # If this part has nested parts (e.g., multipart)
+        if part['mimeType'].startswith('multipart') and 'parts' in part:
+            for sub_part in part['parts']:
+                process_part(sub_part)
+
+        # Handle text/html and text/plain body
+        elif part['mimeType'] == 'text/html':  # Prioritize HTML
+            if not body:  # Avoid overwriting if already found
+                body_encoded = part['body'].get('data')
+                body = part_decoder(body_encoded)
+        elif part['mimeType'] == 'text/plain':  # Fallback to plain text
+            if not body:  # Use plain only if HTML isn't found
+                body_encoded = part['body'].get('data')
+                body = part_decoder(body_encoded)
+
+        # Handle attachments
+        elif 'filename' in part and part['filename']:
+            attachment_id = part['body'].get('attachmentId')
+            filename = part['filename']
+            mime_type = part['mimeType']
+            attachments.append({'filename': filename, 'mimeType': mime_type, 'attachmentId': attachment_id})
+
+    # Process the payload
+    process_part(payload)
+    return body, attachments
+
+def message_to_json_data(ID, From, Date, Subject, body, ThreadID = None, In_Reply_To=None, References=None, Message_ID=None, Thread_Index=None, Thread_Topic=None):
 
     JSON_Body = {
         "ID": ID,
         "ThreadID": ThreadID,
         "In_Reply_To": In_Reply_To,
         "References": References,
+        "Message_ID": Message_ID,
+        "Thread_Index": Thread_Index,
+        "Thread_Topic": Thread_Topic,
         "From": From,
         "Date": Date,
         "Subject": Subject,
-        "Body": body
+        "Body": body,
+        
     }
 
     return JSON_Body
@@ -175,6 +226,9 @@ def write_to_OPENAI(Json_Data):
     Date = Json_Data["Date"]
     Subject = Json_Data["Subject"]
     body = Json_Data["Body"]
+    Message_ID = Json_Data["Message_ID"]
+    Thread_Index = Json_Data["Thread_Index"]
+    Thread_Topic = Json_Data["Thread_Topic"]
     
     
     try:
@@ -189,13 +243,14 @@ def write_to_OPENAI(Json_Data):
         try:
             User = config.get_global_user()   
             send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(From), subject=Subject, html_content=email_body,
-                             thread_id=ThreadID, in_reply_to=In_Reply_To, references=References)
+                             thread_id=ThreadID, in_reply_to=In_Reply_To, References=References, Message_ID=Message_ID, Thread_Index=Thread_Index, Thread_Topic=Thread_Topic)
             change_email_label(User, ID, ["UNREAD"], ["Label_7380834898592995778"])
             update_sender_statistics(sender_email=extract_email(From), cost=approx_cost_usd)
 
             # ~~~~~~~~~~~ JSON ~~~~~~~~~~~
             # Prepare JSON data from the message
-            json_data = message_to_json_data(ID=ID, ThreadID=ThreadID, From="***REMOVED***", Date=Date, Subject=Subject, body=email_body, In_Reply_To=In_Reply_To, References=References) 
+            json_data = message_to_json_data(ID=ID, ThreadID=ThreadID, From="***REMOVED***", Date=Date, Subject=Subject, body=email_body, In_Reply_To=In_Reply_To, References=References, 
+                                             Message_ID=Message_ID, Thread_Index=Thread_Index, Thread_Topic=Thread_Topic) 
             #pirmiausiai pasirasem sau i |JSON| faila
             write_json_data_to_json(json_data)
 
@@ -249,8 +304,14 @@ def test(User):
     #print(Meg_arr)
 
 if __name__ == '__main__':
-    #Runs uvicorn server
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    def run_server():
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    # Start Uvicorn server in a separate thread
+    server_thread = threading.Thread(target=run_server)
+    server_thread.daemon = True  # Allow program to exit even if thread is still running
+    server_thread.start()
+
     # Authenticate and read emails
     User = authenticate_gmail_as_User()
     config.set_a_global_user(User)

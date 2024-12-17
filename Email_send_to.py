@@ -59,7 +59,7 @@ def create_markdown_email_body(total_tokens, approx_cost_usd, response):
     return markdown2.markdown(markdown_body, extras=["fenced-code-blocks"])
 
 # Funkcija siųsti HTML el. laišką
-def send_html_email(service, sender, recipient, subject, html_content, thread_id=None, in_reply_to=None, references=None):
+def send_html_email(service, sender, recipient, subject, html_content, thread_id=None, in_reply_to=None, References=None, Message_ID=None, Thread_Index=None, Thread_Topic=None):
     print(f"Sending email...")
     """
     Siunčia HTML formatu paruoštą el. laišką per Gmail API, su threading laukais.
@@ -87,8 +87,14 @@ def send_html_email(service, sender, recipient, subject, html_content, thread_id
      # Pridėkite threading laukus, jei jie pateikti
     if in_reply_to:
         message["In-Reply-To"] = in_reply_to
-    if references:
-        message["References"] = references
+    if References:
+        message["References"] = References
+    if Message_ID:
+        message["Message-ID"] = Message_ID
+    if Thread_Index:
+        message["Thread-Index"] = Thread_Index
+    if Thread_Topic:
+        message["Thread-Topic"] = Thread_Topic
 
     # Kodavimas į Base64, kaip reikalauja Gmail API
     raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
