@@ -1,4 +1,8 @@
 import os
+import uvicorn
+import ssl
+import config
+
 from gmail_auth import authenticate_gmail_as_User, authenticate_gmail_with_service_account
 from pubsub_notifications import setup_watch, listen_for_notifications_with_service_account
 from utils import extract_email, get_header_value, decode_message
@@ -8,21 +12,29 @@ from openai_integration import call_openai_with_retry
 from Email_processing import format_and_display_emails_table, read_emails
 from Email_send_to import send_html_email, create_markdown_email_body, create_greeting_email
 from Email_labels import get_all_labels, change_email_label
-import config
-import utils
-from sqldb import update_sender_statistics, sender_exists, create_entry
 
+from sqldb import update_sender_statistics, sender_exists, create_entry
 from google.cloud import pubsub_v1
 
-#Dirbtinis intelektas
+from fastapi import FastAPI
+from APIroutes import router
 from openai import OpenAI
-
-#HTML formatavimas
-import ssl
 
 print(ssl.OPENSSL_VERSION)
 ssl_context = ssl.create_default_context()
 ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+
+app = FastAPI(
+    title="Email Processing API",
+    description="API for processing and sending emails",
+    version="1.0.0",
+    openapi_url="/openapi.json",)
+
+app.include_router(router)
+
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}
 
 def process_new_emails(service, history_id):
     print(f"Processing new emails starting with historyId: {history_id}")
@@ -230,6 +242,8 @@ def test(User):
     #print(Meg_arr)
 
 if __name__ == '__main__':
+    #Runs uvicorn server
+    uvicorn.run(app, host="0.0.0.0", port=8000)
     # Authenticate and read emails
     User = authenticate_gmail_as_User()
     config.set_a_global_user(User)
