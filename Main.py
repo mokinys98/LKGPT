@@ -16,8 +16,9 @@ from Email_labels import get_all_labels, change_email_label
 from sqldb import update_sender_statistics, sender_exists, create_entry
 from google.cloud import pubsub_v1
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from APIroutes import router
+from fastapi.templating import Jinja2Templates
 from openai import OpenAI
 
 print(ssl.OPENSSL_VERSION)
@@ -30,11 +31,17 @@ app = FastAPI(
     version="1.0.0",
     openapi_url="/openapi.json",)
 
+
+# Initialize templates directory
+templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "HTMLtemplates"))
+
 app.include_router(router)
 
 @app.get("/")
-async def root():
-    return {"message": "Hello World"}
+async def root(request: Request):
+    # Render a placeholder homepage
+    return templates.TemplateResponse("home.html", {"request": request})
+    
 
 def process_new_emails(service, history_id):
     print(f"Processing new emails starting with historyId: {history_id}")
