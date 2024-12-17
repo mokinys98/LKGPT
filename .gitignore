@@ -22,3 +22,4 @@ __pycache__/
 sender_statistics.db
 
 Dockerfile
+.env

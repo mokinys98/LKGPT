@@ -1,118 +1,99 @@
 import sqlite3
+from supabase import create_client, Client
+import os
 
-# Initialize SQLite database
-def initialize_database():
-    conn = sqlite3.connect('sender_statistics.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sender_statistics (
-            sender_email TEXT PRIMARY KEY,
-            total_emails INTEGER DEFAULT 0,
-            total_cost REAL DEFAULT 0.0
-        )
-    ''')
-    conn.commit()
-    conn.close()
+# Initialize Supabase
+def initialize_supabase():
+    url: str = os.environ.get("SUPABASE_URL")
+    key: str = os.environ.get("SERVICE_ROLE_KEY")
+    supabase: Client = create_client(url, key)
+    return supabase
 
-# Create a new entry in the database
+# Connect to Supabase
+def connect_to_supabase():
+    supabase = initialize_supabase()
+    return supabase
+
+# Test connection: Fetch data from a table
+def test_connection(supabase):
+    try:
+        response = supabase.table("Test").select("*").execute()
+        data = response.data
+        return data
+    except Exception as e:
+        print(f"Error fetching data from Supabase: {e}")
+        return []
+# Create a new entry in the database in a supabase
 def create_entry(sender_email):
-    conn = sqlite3.connect('sender_statistics.db')
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO sender_statistics (sender_email) VALUES (?)', (sender_email,))
-    conn.commit()
-    conn.close()
+    supabase = connect_to_supabase()
+    data = supabase.table("sender_statistics").insert({"sender_email": sender_email}).execute()
+    return data
 
-# Update sender statistics
+# Update sender statistics with supabase
 def update_sender_statistics(sender_email, cost):
-    conn = sqlite3.connect('sender_statistics.db')
-    cursor = conn.cursor()
+    supabase = connect_to_supabase()
+    data = supabase.table("sender_statistics").select("*").eq("sender_email", sender_email).execute()
     
-    # Check if sender already exists
-    cursor.execute('SELECT total_emails, total_cost FROM sender_statistics WHERE sender_email = ?', (sender_email,))
-    result = cursor.fetchone()
-    
-    if result:
+    if data.data:
         # Update existing record
-        total_emails = result[0] + 1
-        total_cost = result[1] + cost
-        cursor.execute('''
-            UPDATE sender_statistics 
-            SET total_emails = ?, total_cost = ?
-            WHERE sender_email = ?
-        ''', (total_emails, total_cost, sender_email))
+        total_emails = data.data[0]["total_emails"] + 1
+        total_cost = data.data[0]["total_cost"] + cost
+        supabase.table("sender_statistics").update({"total_emails": total_emails, "total_cost": total_cost}).eq("sender_email", sender_email).execute()
     else:
         # Insert new record
-        cursor.execute('''
-            INSERT INTO sender_statistics (sender_email, total_emails, total_cost)
-            VALUES (?, ?, ?)
-        ''', (sender_email, 1, cost))
-    
-    conn.commit()
-    conn.close()
+        supabase.table("sender_statistics").insert({"sender_email": sender_email, "total_emails": 1, "total_cost": cost}).execute()
 
-#Checks if the sender exists in the database
+#Checks if the sender exists in the supabase database
 def sender_exists(sender_email):
-    """
-    Checks if the sender exists in the sender_statistics database.
-
-    Args:
-        sender_email (str): The email address of the sender to check.
-
-    Returns:
-        tuple: The database record of the sender if it exists, otherwise None.
-    """
-    # Connect to the SQLite database
-    conn = sqlite3.connect('sender_statistics.db')
-    cursor = conn.cursor()
+    # Connect to the Supabase
+    supabase = connect_to_supabase()
     
     # Execute the query to find the sender
-    cursor.execute('SELECT * FROM sender_statistics WHERE sender_email = ?', (sender_email,))
-    result = cursor.fetchone()
-    
-    # Close the database connection
-    conn.close()
+    data = supabase.table("sender_statistics").select("*").eq("sender_email", sender_email).execute()
+    result = data.data
     
     # Return the result
     return result
 
-def view_all_entries(database_path, table_name):
+# Fetches and displays all entries from a given Supabase table
+def view_all_entries(supabase):
     """
-    Fetches and displays all entries from a given SQLite table.
+    Fetches and displays all entries from a given Supabase table.
 
     Args:
-        database_path (str): Path to the SQLite database file.
-        table_name (str): Name of the table to view.
+        supabase (Client): Supabase client instance.
 
     """
     try:
-        # Connect to the SQLite database
-        conn = sqlite3.connect(database_path)
-        cursor = conn.cursor()
-        
         # Fetch all entries from the table
-        query = f"SELECT * FROM {table_name}"
-        cursor.execute(query)
-        rows = cursor.fetchall()
+        data = supabase.table("sender_statistics").select("*").execute()
+        rows = data.data
 
         # Fetch column names for better readability
-        column_names = [description[0] for description in cursor.description]
+        column_names = [key for key in rows[0].keys()]
         
         # Display the table contents
-        print(f"Entries in table '{table_name}':")
+        print(f"Entries in table 'sender_statistics':")
         print(f"{' | '.join(column_names)}")
         print("-" * 50)
         for row in rows:
-            print(" | ".join(map(str, row)))
+            print(" | ".join(map(str, row.values())))
 
-        # Close the connection
-        conn.close()
-
-    except sqlite3.Error as e:
+    except Exception as e:
         print(f"Error accessing database: {e}")
 
 # Example usage
 
 
 if __name__ == '__main__':
-    initialize_database()
-    view_all_entries("sender_statistics.db", "sender_statistics")
+    
+    # Authenticate and retrieve the current user's UUID
+    #session = supabase.auth.sign_in_with_password({"email": "***REMOVED***", "password": "***REMOVED***"})
+    #print(session.user.id)  # Prints the user's UUID
+
+    #view_all_entries("sender_statistics.db", "sender_statistics")
+    data = test_connection(connect_to_supabase())
+    data2 = sender_exists("Aurimas.Zvirblys@mil.lt")
+    update_sender_statistics("no-reply@google.com", 0.01)
+    print(data)
+    print(data2)

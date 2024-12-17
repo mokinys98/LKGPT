@@ -10,7 +10,7 @@ from Email_send_to import send_html_email, create_markdown_email_body, create_gr
 from Email_labels import get_all_labels, change_email_label
 import config
 import utils
-from sqldb import initialize_database, update_sender_statistics, sender_exists, create_entry
+from sqldb import update_sender_statistics, sender_exists, create_entry
 
 from google.cloud import pubsub_v1
 
@@ -230,8 +230,6 @@ def test(User):
     #print(Meg_arr)
 
 if __name__ == '__main__':
-    #init
-    initialize_database()
     # Authenticate and read emails
     User = authenticate_gmail_as_User()
     config.set_a_global_user(User)
