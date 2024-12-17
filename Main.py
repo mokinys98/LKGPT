@@ -255,9 +255,6 @@ if __name__ == '__main__':
     User = authenticate_gmail_as_User()
     config.set_a_global_user(User)
     
-    #test(User)
-    #from TestingFunctions import process_specific_email
-    #process_specific_email(User, 18000, 18244)
 
     # Path to the service account key file
     service_account_key_path = os.path.join("Creds", "skilful-mercury-444620-s6-2526f9ed3422.json")
