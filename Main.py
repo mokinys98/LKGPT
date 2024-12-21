@@ -8,21 +8,21 @@ import ssl
 import config
 import threading
 
-from gmail_auth import authenticate_gmail_as_User, authenticate_gmail_with_service_account
+from Emails.Gmail_auth import authenticate_gmail_as_User, authenticate_gmail_with_service_account
 from PubSub.pubsub_notifications import setup_watch, listen_for_notifications_with_service_account
 from Helpers.utils import extract_email, get_header_value, decode_message
 from outmethods import write_json_data_to_json
-from openai_integration import call_openai_with_retry
+from API.openai_integration import call_openai_with_retry
 
-from Email_processing import format_and_display_emails_table, read_emails
-from Email_send_to import send_html_email, create_markdown_email_body, create_greeting_email
-from Email_labels import get_all_labels, change_email_label
+from Emails.Email_processing import format_and_display_emails_table, read_emails
+from Emails.Email_send_to import send_html_email, create_markdown_email_body, create_greeting_email
+from Emails.Email_labels import get_all_labels, change_email_label
 
 from sql.sqldb import update_sender_statistics, sender_exists, create_entry
 from google.cloud import pubsub_v1
 
 from fastapi import FastAPI, Request
-from APIroutes import router
+from API.APIroutes import router
 from fastapi.templating import Jinja2Templates
 from openai import OpenAI
 
