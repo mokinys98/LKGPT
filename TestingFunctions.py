@@ -1,5 +1,5 @@
-from utils import extract_email, get_header_value, decode_message
-from sqldb import update_sender_statistics, sender_exists, create_entry
+from Helpers.utils import extract_email, get_header_value, decode_message
+from sql.sqldb import update_sender_statistics, sender_exists, create_entry
 from Email_processing import format_and_display_emails_table, read_emails
 from Email_send_to import send_html_email, create_markdown_email_body, create_greeting_email
 from Email_labels import get_all_labels, change_email_label

@@ -1,12 +1,16 @@
+import sys
 import os
+
+# Add project root to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 import uvicorn
 import ssl
 import config
 import threading
 
 from gmail_auth import authenticate_gmail_as_User, authenticate_gmail_with_service_account
-from pubsub_notifications import setup_watch, listen_for_notifications_with_service_account
-from utils import extract_email, get_header_value, decode_message
+from PubSub.pubsub_notifications import setup_watch, listen_for_notifications_with_service_account
+from Helpers.utils import extract_email, get_header_value, decode_message
 from outmethods import write_json_data_to_json
 from openai_integration import call_openai_with_retry
 
@@ -14,7 +18,7 @@ from Email_processing import format_and_display_emails_table, read_emails
 from Email_send_to import send_html_email, create_markdown_email_body, create_greeting_email
 from Email_labels import get_all_labels, change_email_label
 
-from sqldb import update_sender_statistics, sender_exists, create_entry
+from sql.sqldb import update_sender_statistics, sender_exists, create_entry
 from google.cloud import pubsub_v1
 
 from fastapi import FastAPI, Request

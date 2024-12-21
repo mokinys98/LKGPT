@@ -2,7 +2,7 @@ import os
 import time
 from dotenv import find_dotenv, load_dotenv
 from openai import OpenAI
-from utils import decode_message
+from Helpers.utils import decode_message
 from google.cloud import pubsub_v1
 
 load_dotenv(find_dotenv())
