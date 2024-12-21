@@ -1,3 +1,4 @@
+import re
 from Helpers.utils import decode_message
 import json
 import os
@@ -35,6 +36,10 @@ def save_message_to_file_as_json(msg):
     print("Message saved to email_message.json")
 
 
+def sanitize_file_name(file_name):
+    # Replace invalid characters with an underscore or any other character
+    return re.sub(r'[<>:"/\\|?*]', '_', file_name)
+
 def write_json_data_to_json(JSON_Body):
 
     # Clean the subject to remove "RE:", "FWD:", or similar prefixes
@@ -43,7 +48,7 @@ def write_json_data_to_json(JSON_Body):
 
     # Folder and file paths
     folder_name = "emails"
-    file_name = cleaned_subject +".json"
+    file_name = sanitize_file_name(cleaned_subject) +".json"
     file_path = os.path.join(folder_name, file_name)
 
     # Ensure the folder exists

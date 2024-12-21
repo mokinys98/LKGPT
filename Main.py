@@ -7,6 +7,7 @@ import uvicorn
 import ssl
 import config
 import threading
+from googleapiclient.errors import HttpError
 
 from Emails.Gmail_auth import authenticate_gmail_as_User, authenticate_gmail_with_service_account
 from PubSub.pubsub_notifications import setup_watch, listen_for_notifications_with_service_account

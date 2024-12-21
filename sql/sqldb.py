@@ -1,4 +1,5 @@
 import sqlite3
+import postgrest
 from supabase import create_client, Client
 import os
 
@@ -23,6 +24,7 @@ def test_connection(supabase):
     except Exception as e:
         print(f"Error fetching data from Supabase: {e}")
         return []
+    
 # Create a new entry in the database in a supabase
 def create_entry(sender_email):
     supabase = connect_to_supabase()
@@ -82,7 +84,36 @@ def view_all_entries(supabase):
     except Exception as e:
         print(f"Error accessing database: {e}")
 
-# Example usage
+
+#Sends a one-email info to supabase
+def send_email_info(history_id, json_data):
+    # Connect to Supabase
+    supabase = connect_to_supabase()
+
+    #Get all variables from JSON
+    ID = json_data["ID"]
+    ThreadID = json_data["ThreadID"]
+    In_Reply_To = json_data["In_Reply_To"]
+    References = json_data["References"]
+    From = json_data["From"]
+    Date = json_data["Date"]
+    Subject = json_data["Subject"]
+    body = json_data["Body"]
+    Message_ID = json_data["Message_ID"]
+    Thread_Index = json_data["Thread_Index"]
+    Thread_Topic = json_data["Thread_Topic"]
+    history_id = history_id
+
+    try:    # Execute the query
+        supabase.table("email_history").insert({"id": ID, "history_id": history_id, "threadid": ThreadID, "message_id": Message_ID, "sender_email": From, "date": Date, "subject": Subject, "body": body,"in_reply_to": In_Reply_To, "referencesnr": References, "thread_index": Thread_Index, "thread_topic": Thread_Topic }).execute()
+    except postgrest.exceptions.APIError as e:
+    # Check if the error is a duplicate key violation
+        if e.code == '23505':
+            print(f"Duplicate key error: {e.details}")
+            # Handle the duplicate key case (e.g., skip, update, or log)
+        else:
+            # Re-raise the exception if it's a different APIError
+            raise
 
 
 if __name__ == '__main__':

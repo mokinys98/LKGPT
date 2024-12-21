@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
-from APImodels import User
+from .APImodels import User
 from sql.sqldb import initialize_supabase, connect_to_supabase
 
 router = APIRouter()

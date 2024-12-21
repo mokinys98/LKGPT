@@ -1,9 +1,9 @@
 from Helpers.utils import extract_email, get_header_value, decode_message
 from sql.sqldb import update_sender_statistics, sender_exists, create_entry
-from Email_processing import format_and_display_emails_table, read_emails
-from Email_send_to import send_html_email, create_markdown_email_body, create_greeting_email
-from Email_labels import get_all_labels, change_email_label
-from gmail_auth import authenticate_gmail_as_User
+from Emails.Email_processing import format_and_display_emails_table, read_emails
+from Emails.Email_send_to import send_html_email, create_markdown_email_body, create_greeting_email
+from Emails.Email_labels import get_all_labels, change_email_label
+from Emails.Gmail_auth import authenticate_gmail_as_User
 #Dirbtinis intelektas
 from openai import OpenAI
 import config
@@ -59,32 +59,7 @@ def process_specific_email(service, history_id, specific_email):
                         full_message = service.users().messages().get(userId='me', id=message['message']['id']).execute()
                         labels = full_message.get('labelIds', [])
 
-                        # #Checks if Subject is Saskaita
-                        # if 'Saskaita' in full_message['subject']:
-                        #     send_bill_email(service, full_message)
-
-
-                        # headers = full_message['payload']['headers']
-                        # From = get_header_value(headers, "From")
-                        # sender_email = extract_email(From)
-                        # bool = sender_exists(sender_email)
-                        # if bool:
-                        #     print(f"Sender exists in the database: {sender_email}")
-                        # else:
-                        #     print(f"Sender does not exist in the database: {sender_email}")
-                        #     email_body = create_greeting_email()
-                        #     try:
-                        #         User = config.get_global_user()   
-                        #         send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(sender_email), subject="Sveiki!", html_content=email_body)
-                        #         create_entry(sender_email)
-                        #         continue
-                        #     except Exception as e:
-                        #         print(f"Error sending email: {e}")
-                        #         continue
-                        
-
                         #BIG CHANGE TO LET ALL EMAILS GO TO OPENAI
-                        
                         processed_message_ids.add(message['message']['id'])
                         new_messages.append(full_message)
                         print(f"Formuojama nauja užklausa į OPENAI")
@@ -108,6 +83,9 @@ def test_write_to_OPENAI(Json_Data):
     Date = Json_Data["Date"]
     Subject = Json_Data["Subject"]
     body = Json_Data["Body"]
+    Message_ID = Json_Data["Message_ID"]
+    Thread_Index = Json_Data["Thread_Index"]
+    Thread_Topic = Json_Data["Thread_Topic"]
     
     
     try:
@@ -167,18 +145,13 @@ def test_message_handler(message):
     # Default fallback if no body is found
     body = body if body else "No content found"
 
-    # Prepare JSON data from the message
-    json_data = test_message_to_json_data(
-        ID=ID,
-        ThreadID=ThreadId,
-        From=From,
-        Date=Date,
-        Subject=Subject,
-        body=body,
-        In_Reply_To=In_Reply_To,
-        References=References
-    )
+    # Default fallback if no body is found
+    body = body if 'body' in locals() else "No content found"
 
+    # Prepare JSON data from the message
+    json_data = test_message_to_json_data(ID=ID, ThreadID=ThreadId, From=From, Date=Date, Subject=Subject, body=body, In_Reply_To=In_Reply_To, References=References, 
+                                     Message_ID=Message_ID, Thread_Index=Thread_Index, Thread_Topic=Thread_Topic)
+    
     # Output attachments if needed
     if attachments:
         json_data['attachments'] = attachments
@@ -222,17 +195,21 @@ def decode_parts(payload, part_decoder):
     process_part(payload)
     return body, attachments
 
-def test_message_to_json_data(ID, From, Date, Subject, body, ThreadID = None, In_Reply_To=None, References=None):
+def test_message_to_json_data(ID, From, Date, Subject, body, ThreadID = None, In_Reply_To=None, References=None, Message_ID=None, Thread_Index=None, Thread_Topic=None):
 
     JSON_Body = {
         "ID": ID,
         "ThreadID": ThreadID,
         "In_Reply_To": In_Reply_To,
         "References": References,
+        "Message_ID": Message_ID,
+        "Thread_Index": Thread_Index,
+        "Thread_Topic": Thread_Topic,
         "From": From,
         "Date": Date,
         "Subject": Subject,
-        "Body": body
+        "Body": body,
+        
     }
 
     return JSON_Body
