@@ -151,7 +151,8 @@ def message_handler(message):
     From = get_header_value(headers, "From")
     Subject = get_header_value(headers, "Subject")
     In_Reply_To = get_header_value(headers, "In-Reply-To")
-    References = get_header_value(headers, "References")
+    Pre_References = get_header_value(headers, "References")
+    References = Pre_References.replace("N/A ", "").strip()
 
     # Outlook conversion headers
     Message_ID = get_header_value(headers, "Message-ID")

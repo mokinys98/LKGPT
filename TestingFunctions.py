@@ -132,7 +132,9 @@ def test_message_handler(message):
     From = get_header_value(headers, "From")
     Subject = get_header_value(headers, "Subject")
     In_Reply_To = get_header_value(headers, "In-Reply-To")
-    References = get_header_value(headers, "References")
+    Pre_References = get_header_value(headers, "References")
+    References = Pre_References.replace("N/A ", "").strip()
+    
 
     # Outlook conversion headers
     Message_ID = get_header_value(headers, "Message-ID")
@@ -218,4 +220,4 @@ if __name__ == '__main__':
     
     User = authenticate_gmail_as_User()
     config.set_a_global_user(User)
-    process_specific_email(User, 20000, 21575)
+    process_specific_email(User, 25000, 25540)
