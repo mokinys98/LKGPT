@@ -19,7 +19,7 @@ from Emails.Email_processing import format_and_display_emails_table, read_emails
 from Emails.Email_send_to import send_html_email, create_markdown_email_body, create_greeting_email
 from Emails.Email_labels import get_all_labels, change_email_label
 
-from sql.sqldb import update_sender_statistics, sender_exists, create_entry
+from sql.sqldb import update_sender_statistics, sender_exists, create_entry, send_email_info
 from google.cloud import pubsub_v1
 
 from fastapi import FastAPI, Request
@@ -86,15 +86,24 @@ def process_new_emails(service, history_id):
                             print(f"Skipping sent message ID: {message['message']['id']}")
                             continue
 
-                        #Check if the message contains INBOX and UNREAD labels
-                        full_message = service.users().messages().get(userId='me', id=message['message']['id']).execute()
-                        labels = full_message.get('labelIds', [])
-
+                        history_id = record['id']
+                        #Gets the full message
+                        try:
+                            full_message = service.users().messages().get(userId='me', id=message['message']['id']).execute()
+                        except HttpError as e:
+                            if e.reason == 'Requested entity was not found.':
+                                print(f"Email with History_ID: {history_id} not found")
+                                continue
+                            else:
+                                # Re-raise the exception if it's a different APIError
+                                raise
+                        
                         # #Checks if Subject is Saskaita
                         # if 'Saskaita' in full_message['subject']:
                         #     send_bill_email(service, full_message)
 
-
+                        #Checks if Sender is in the database and sends a welcome email
+                        labels = full_message.get('labelIds', [])
                         headers = full_message['payload']['headers']
                         From = get_header_value(headers, "From")
                         sender_email = extract_email(From)
@@ -113,12 +122,14 @@ def process_new_emails(service, history_id):
                                 print(f"Error sending email: {e}")
                                 continue
                         
+                        #Checks if message is INBOX and UNREAD
                         if 'INBOX' in labels and 'UNREAD' in labels:
                             processed_message_ids.add(message['message']['id'])
                             new_messages.append(full_message)
                             print(f"Formuojama nauja užklausa į OPENAI")
                             json_data = message_handler(full_message)
                             write_to_OPENAI(json_data)
+                            send_email_info(history_id, json_data)
 
         if new_messages:
             print("\nNew Emails Received:")

@@ -1,3 +1,4 @@
+from datetime import datetime
 import sqlite3
 import postgrest
 from supabase import create_client, Client
@@ -84,6 +85,17 @@ def view_all_entries(supabase):
     except Exception as e:
         print(f"Error accessing database: {e}")
 
+def format_date(date_string):
+    try:
+        # Remove the (PST) or other timezone abbreviations in parentheses
+        sanitized_date_string = date_string.split(' (')[0]
+        # Parse the date string and convert it to the desired format
+        parsed_date = datetime.strptime(sanitized_date_string, "%a, %d %b %Y %H:%M:%S %z")
+        # Convert to a format compatible with your database (UTC without timezone)
+        return parsed_date.strftime("%Y-%m-%d %H:%M:%S")
+    except ValueError as e:
+        print(f"Error parsing date: {date_string}. Error: {e}")
+        return None  # Return None or handle it as needed
 
 #Sends a one-email info to supabase
 def send_email_info(history_id, json_data):
@@ -96,7 +108,7 @@ def send_email_info(history_id, json_data):
     In_Reply_To = json_data["In_Reply_To"]
     References = json_data["References"]
     From = json_data["From"]
-    Date = json_data["Date"]
+    Date = format_date(json_data["Date"])
     Subject = json_data["Subject"]
     body = json_data["Body"]
     Message_ID = json_data["Message_ID"]
