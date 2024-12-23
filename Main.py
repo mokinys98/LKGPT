@@ -247,7 +247,6 @@ def write_to_OPENAI(Json_Data):
     Thread_Index = Json_Data["Thread_Index"]
     Thread_Topic = Json_Data["Thread_Topic"]
     
-    
     try:
         result = call_openai_with_retry(prompt=body, max_retries=3, wait_time=5)
         total_tokens = result.usage.total_tokens
@@ -294,7 +293,6 @@ def test(User):
             msg = User.users().messages().get(userId='me', id=message['message']['id']).execute()
             Meg_arr.append(msg)
             
-
     #Create a function to evaluate and compare the headers of all mesages
     def extract_headers(messages):
         headers_dict = {}
@@ -333,8 +331,7 @@ if __name__ == '__main__':
     User = authenticate_gmail_as_User()
     config.set_a_global_user(User)
     
-
-    # Path to the service account key file
+    # Path to the service account key fil
     service_account_key_path = os.path.join("Creds", "skilful-mercury-444620-s6-2526f9ed3422.json")
     # Authenticate Gmail API
     service_account = authenticate_gmail_with_service_account(service_account_key_path)
