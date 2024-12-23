@@ -1,238 +1,64 @@
-#Gmail API
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from google.auth.transport.requests import Request 
-from google.oauth2 import service_account as sa_credentials
-from google.cloud import pubsub_v1
-#Bibliotekos
+import sys
 import os
-import base64
-import json
-import time
-import re
-#Dirbtinis intelektas
-from openai import OpenAI
-#Lentele CLI
-from tabulate import tabulate
-#Dotenv API raktams
-from dotenv import find_dotenv, load_dotenv
-#HTML formatavimas
-import markdown2
-from email.mime.text import MIMEText
-import base64
+
+# Add project root to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+import uvicorn
 import ssl
+import config
+import threading
+from googleapiclient.errors import HttpError
+
+from Emails.Gmail_auth import authenticate_gmail_as_User, authenticate_gmail_with_service_account
+from PubSub.pubsub_notifications import setup_watch, listen_for_notifications_with_service_account
+from Helpers.utils import extract_email, get_header_value, decode_message
+from outmethods import write_json_data_to_json
+from API.openai_integration import call_openai_with_retry
+
+from Emails.Email_processing import format_and_display_emails_table, read_emails
+from Emails.Email_send_to import send_html_email, create_markdown_email_body, create_greeting_email
+from Emails.Email_labels import get_all_labels, change_email_label
+
+from sql.sqldb import update_sender_statistics, sender_exists, create_entry, send_email_info
+from google.cloud import pubsub_v1
+
+from fastapi import FastAPI, Request
+from API.APIroutes import router
+from fastapi.templating import Jinja2Templates
+from openai import OpenAI
 
 print(ssl.OPENSSL_VERSION)
 ssl_context = ssl.create_default_context()
 ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
 
-load_dotenv(find_dotenv())
-# Replace with your OpenAI API key
-client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+app = FastAPI(
+    title="Email Processing API",
+    description="API for processing and sending emails",
+    version="1.0.0",
+    openapi_url="/openapi.json",)
 
-# Scopes for reading Gmail messages
-SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
-def authenticate_gmail_as_User():
-    """
-    Authenticate the user and return a Gmail API service instance.
+# Initialize templates directory
+templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "HTMLtemplates"))
+
+app.include_router(router)
+
+@app.get("/")
+async def root(request: Request):
+    # Render a placeholder homepage
+    return templates.TemplateResponse("home.html", {"request": request})
     
-    Returns:
-        service: An authorized Gmail API service instance.
-    """
-    creds = None
-    # Check if token.json exists for stored credentials
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-    # If there are no valid credentials, prompt the user to log in
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        # Save credentials for future runs
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
-
-    # Build the Gmail API service
-    service = build('gmail', 'v1', credentials=creds)
-    return service
-
-def authenticate_gmail_with_service_account(key_path):
-    """
-    Authenticate using a service account and return a Gmail API service instance.
-    
-    Args:
-        key_path: Path to the service account key file (JSON).
-    
-    Returns:
-        service: An authorized Gmail API service instance.
-    """
-    credentials = sa_credentials.Credentials.from_service_account_file(
-        key_path, scopes=['https://www.googleapis.com/auth/gmail.modify']
-    )
-
-    service = build('gmail', 'v1', credentials=credentials)
-    return service
-
-def decode_message(encoded_data):
-    decoded_bytes = base64.urlsafe_b64decode(encoded_data)
-    return decoded_bytes.decode('utf-8')
-def save_message_to_file(msg):
-    headers = msg['payload']['headers']
-    snippet = msg['snippet']
-    body_encoded = msg['payload']['parts'][0]['body']['data']  # Base64-encoded body
-    body = decode_message(body_encoded)  # Decode the body content
-
-    # Prepare content to save
-    content = f"Headers: {headers}\n\nSnippet: {snippet}\n\nBody (text/plain):\n{body}\n"
-
-    # Save to file
-    with open("email_message.txt", "w", encoding="utf-8") as file:
-        file.write(content)
-    print("Message saved to email_message.txt")
-def save_message_to_file_as_json(msg):
-    headers = msg['payload']['headers']
-    snippet = msg['snippet']
-    body_encoded = msg['payload']['parts'][0]['body']['data']  # Base64-encoded body
-    body = decode_message(body_encoded)  # Decode the body content
-
-    # Convert headers to JSON format
-    headers_json = json.dumps(headers, indent=4)
-
-    # Prepare content to save
-    content = f"Headers (JSON):\n{headers_json}\n\nSnippet: {snippet}\n\nBody (text/plain):\n{body}\n"
-
-    # Save to file
-    with open("email_message.json", "w", encoding="utf-8") as file:
-        file.write(content)
-    print("Message saved to email_message.json")
-def format_and_display_emails_table(messages):
-    """
-    Formats and displays email details in a single-line table with an additional domain column: DATE, Sender, Subject, Domain.
-
-    Args:
-        messages (list): List of email message objects retrieved via the Gmail API.
-    """
-    # Prepare data for the table
-    table_data = []
-    for msg in messages:
-        # Extract headers
-        headers = msg['payload']['headers']
-        
-        # Initialize variables
-        date = "N/A"
-        sender = "N/A"
-        subject = "N/A"
-        domain = "N/A"
-        
-        # Find the required headers
-        for header in headers:
-            if header['name'] == 'Date':
-                date = header['value']
-            elif header['name'] == 'From':
-                sender = header['value']
-            elif header['name'] == 'Subject':
-                subject = header['value']
-        
-        # Extract the domain from the sender's email
-        if sender != "N/A" and "<" in sender:
-            # Extract email from "Name <email@example.com>" format
-            sender_email = sender.split("<")[1].strip(">")
-        else:
-            sender_email = sender
-        domain = extract_domain(sender_email)
-        
-        # Add data as a single row
-        table_data.append([date, sender, domain, subject])
-
-    # Print the table with one message per line
-    print(tabulate(table_data, headers=["DATE", "Sender", "Domain", "Subject"], tablefmt="grid"))
-def extract_domain(sender_email):
-    """
-    Extracts the domain from the sender's email address.
-    Args:
-        sender_email (str): The sender's email address.
-    Returns:
-        str: The domain of the email.
-    """
-    if "@" in sender_email:
-        return sender_email.split("@")[1]
-    return "N/A"
-def read_emails(service):
-    # Get the list of messages
-    results = service.users().messages().list(userId='me', maxResults=10).execute()
-    messages = []
-    labels = results.get("labels", [])
-
-    if not labels:
-        print("No labels found.")
-    else:
-        print("Labels:")
-        for label in labels:
-            print(label["name"])
-
-    # Fetch each message's details
-    for msg in results.get('messages', []):
-        full_message = service.users().messages().get(userId='me', id=msg['id']).execute()
-        messages.append(full_message)
-
-    # Display the messages in a table
-    format_and_display_emails_table(messages)   
-
-def setup_watch(service, topic_name):
-    global last_history_id
-    request = {
-        "labelIds": ["INBOX"],  # Watch only the inbox
-        "topicName": topic_name  # Pub/Sub topic name
-    }
-    response = service.users().watch(userId='me', body=request).execute()
-    last_history_id = response.get('historyId')
-    print("Watch setup successful:", response)
-    return response
-
-def create_callback(service):
-    def callback(message):
-        global last_history_id
-
-        print(f"Received Pub/Sub message: {message.data.decode('utf-8')}")
-        message.ack()  # Acknowledge the message
-
-        notification = json.loads(message.data.decode('utf-8'))
-        pubsub_history_id = int(notification['historyId'])
-
-        # Zinutes kurios ateina   ///    Nuo Watch pasijungimo
-        if pubsub_history_id <= int(last_history_id):
-            print(f"Ignoring older or already processed historyId: {pubsub_history_id}")
-            return
-
-        # Process new emails starting from the last_history_id
-        process_new_emails(service, last_history_id)
-    return callback
-
-def listen_for_notifications_with_service_account(subscription_name, key_path, service):
-    
-    credentials = sa_credentials.Credentials.from_service_account_file(key_path)
-    subscriber = pubsub_v1.SubscriberClient(credentials=credentials)
-    subscription_path = subscriber.subscription_path('skilful-mercury-444620-s6', subscription_name)
-
-    # Pass the service object to the callback
-    callback = create_callback(service)
-
-    print(f"Listening for messages on {subscription_path}...")
-    subscriber.subscribe(subscription_path, callback=callback)
-
-    while True:
-        time.sleep(60)
 
 def process_new_emails(service, history_id):
-    print(f"Processing new emails starting with historyId: {last_history_id}")
+    print(f"Processing new emails starting with historyId: {history_id}")
 
     try:
         # Call the Gmail API to list history
-        response = service.users().history().list(userId='me', startHistoryId=last_history_id).execute() # Gauna sarašąs pagal historyId
+        response = service.users().history().list(
+            userId='me',
+            startHistoryId=history_id,
+            historyTypes=['messageAdded']
+            ).execute() # Gauna sarašąs pagal historyId
 
         if 'historyId' not in response:
             print("No history records found in the response.")
@@ -240,34 +66,71 @@ def process_new_emails(service, history_id):
         
         new_messages = []
         processed_message_ids = set()
-        if 'history' in response: # Jei response'je yra history
+        if 'history' in response: 
             for record in response['history']:
-                if 'messages' in record:
-                    for message in record['messages']:
+                if 'messagesAdded' in record:
+                    for message in record['messagesAdded']:
+
                         # Skip already processed messages
-                        if message['id'] in processed_message_ids:
-                            print(f"Skipping already processed message ID: {message['id']}")
+                        if message['message']['id'] in processed_message_ids:
+                            print(f"Skipping already processed message ID: {message['message']['id']}")
                             continue
 
-                        full_message = service.users().messages().get(userId='me', id=message['id']).execute()
-                        processed_message_ids.add(message['id'])
+                        # Skip messages with DRAFT labels
+                        if 'DRAFT' in message['message']['labelIds']:
+                            print(f"Skipping draft message ID: {message['message']['id']}")
+                            continue
+
+                        # Skip messages with SENT labels
+                        if 'SENT' in message['message']['labelIds']:
+                            print(f"Skipping sent message ID: {message['message']['id']}")
+                            continue
+
+                        history_id = record['id']
+                        #Gets the full message
+                        try:
+                            full_message = service.users().messages().get(userId='me', id=message['message']['id']).execute()
+                        except HttpError as e:
+                            if e.reason == 'Requested entity was not found.':
+                                print(f"Email with History_ID: {history_id} not found")
+                                continue
+                            else:
+                                # Re-raise the exception if it's a different APIError
+                                raise
                         
+                        # #Checks if Subject is Saskaita
+                        # if 'Saskaita' in full_message['subject']:
+                        #     send_bill_email(service, full_message)
 
-                        # Check if the message is sent by the bot
-                        headers = full_message['payload']['headers']
-                        sender = get_header_value(headers, "From")
-                        if "***REMOVED***" in sender:
-                            print(f"Skipping email sent by the bot: {sender}")
-                            continue
-
-
+                        #Checks if Sender is in the database and sends a welcome email
                         labels = full_message.get('labelIds', [])
-                        if 'INBOX' in labels:
+                        headers = full_message['payload']['headers']
+                        From = get_header_value(headers, "From")
+                        sender_email = extract_email(From)
+                        bool = sender_exists(sender_email)
+                        if bool:
+                            print(f"Sender exists in the database: {sender_email}")
+                        else:
+                            print(f"Sender does not exist in the database: {sender_email}")
+                            email_body = create_greeting_email()
+                            try:
+                                User = config.get_global_user()   
+                                send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(sender_email), subject="Sveiki!", html_content=email_body)
+                                create_entry(sender_email)
+                                continue
+                            except Exception as e:
+                                print(f"Error sending email: {e}")
+                                continue
+                        
+                        #Checks if message is INBOX and UNREAD
+                        if 'INBOX' in labels and 'UNREAD' in labels:
+                            processed_message_ids.add(message['message']['id'])
                             new_messages.append(full_message)
                             print(f"Formuojama nauja užklausa į OPENAI")
-                            write_to_OPENAI(full_message)
+                            json_data = message_handler(full_message)
+                            write_to_OPENAI(json_data)
+                            send_email_info(history_id, json_data)
 
-        update_last_history_id(response['historyId'])
         if new_messages:
             print("\nNew Emails Received:")
             format_and_display_emails_table(new_messages)
@@ -275,332 +138,201 @@ def process_new_emails(service, history_id):
     except Exception as e:
         print(f"Error processing new emails: {e}")
 
+def message_handler(message):
+    # Fetch full message data using Gmail API
+    payload = message.get('payload', {})
 
-
-def update_last_history_id(new_value):
-    global last_history_id
-    last_history_id = new_value
-    print(f"Updated last_history_id to: {new_value}")
-def set_a_global_user(user):
-    global global_user
-    global_user = user
-
-def create_OPENAI_User_message(text):
-    return {
-        "role": "user",
-        "content": text
-    }
-def create_OPENAI_Assistant_message(text):
-    return {
-        "role": "assistant",
-        "content": text
-    }
-def get_header_value(headers, target_name):
-    """
-    Fetch the value of a specific header by name.
-
-    Args:
-        headers (list): List of header objects from the email payload.
-        target_name (str): The name of the header to fetch (e.g., "Date", "From").
-
-    Returns:
-        str: The value of the header if found, else "N/A".
-    """
-    for header in headers:
-        if header['name'].lower() == target_name.lower():  # Case-insensitive match
-            return header['value']
-    return "N/A"  # Return a default value if the header is not found
-
-def extract_email(recipient):
-    """
-    Extracts the email address from a recipient string.
-
-    Args:
-        recipient (str): The recipient string, e.g., "Name <email@example.com>" or "email@example.com".
-
-    Returns:
-        str: The extracted email address, or None if invalid.
-    """
-    email_regex = r"<([^>]+)>"  # Match email inside angle brackets
-    if "<" in recipient and ">" in recipient:  # If name and email format
-        match = re.search(email_regex, recipient)
-        if match:
-            return match.group(1).strip()  # Return the email inside angle brackets
-    else:
-        # Assume it's just the email if no angle brackets
-        return recipient.strip()
-
-    return None  # Return None if invalid
-
-def write_to_OPENAI(msg):
-
-    ID = msg['id']
-    headers = msg['payload']['headers']
+    ID = message['id']
+    ThreadId = message['threadId']
+    headers = payload.get('headers', [])
 
     # Dynamically fetch headers
     Date = get_header_value(headers, "Date")
     From = get_header_value(headers, "From")
     Subject = get_header_value(headers, "Subject")
- 
-    # Decode the body dynamically
-    if 'parts' in msg['payload']:
-        # Handle multipart emails
-        for part in msg['payload']['parts']:
-            if part['mimeType'] == 'text/html':  # Prioritize HTML
-                body_encoded = part['body']['data']
-                body = decode_message(body_encoded)
-                break
-            elif part['mimeType'] == 'text/plain':  # Fallback to plain text
-                body_encoded = part['body']['data']
-                body = decode_message(body_encoded)
-    else:
-        # Handle single-part emails
-        if 'body' in msg['payload'] and 'data' in msg['payload']['body']:
-            body_encoded = msg['payload']['body']['data']
-            body = decode_message(body_encoded)
+    In_Reply_To = get_header_value(headers, "In-Reply-To")
+    Pre_References = get_header_value(headers, "References")
+    References = Pre_References.replace("N/A ", "").strip()
+
+    # Outlook conversion headers
+    Message_ID = get_header_value(headers, "Message-ID")
+    Thread_Index = get_header_value(headers, "Thread-Index")
+    Thread_Topic = get_header_value(headers, "Thread-Topic")
+
+    # Decode the body and attachments dynamically
+    body, attachments = decode_parts(payload, decode_message)
+
+    # Default fallback if no body is found
+    body = body if body else "No content found"
 
     # Default fallback if no body is found
     body = body if 'body' in locals() else "No content found"
 
-    #pirmiausiai pasirasem sau i |JSON| faila
-    write_to_json(ID, From, Date, Subject, body)
+    # Prepare JSON data from the message
+    json_data = message_to_json_data(ID=ID, ThreadID=ThreadId, From=From, Date=Date, Subject=Subject, body=body, In_Reply_To=In_Reply_To, References=References, 
+                                     Message_ID=Message_ID, Thread_Index=Thread_Index, Thread_Topic=Thread_Topic)
 
-    # Skip emails sent by the bot
-    if "***REMOVED***" in From:
-        print(f"Skipping email sent by the bot: {From}")
-        return
+    # Output attachments if needed
+    if attachments:
+        json_data['attachments'] = attachments 
+
+    #pirmiausiai pasirasem sau i JSON faila
+    write_json_data_to_json(json_data)
+
+    return json_data
+
+def decode_parts(payload, part_decoder):
+    body = None
+    attachments = []
+
+    # Function to recursively decode parts
+    def process_part(part):
+        nonlocal body
+
+        # If this part has nested parts (e.g., multipart)
+        if part['mimeType'].startswith('multipart') and 'parts' in part:
+            for sub_part in part['parts']:
+                process_part(sub_part)
+
+        # Handle text/html and text/plain body
+        elif part['mimeType'] == 'text/html':  # Prioritize HTML
+            if not body:  # Avoid overwriting if already found
+                body_encoded = part['body'].get('data')
+                body = part_decoder(body_encoded)
+        elif part['mimeType'] == 'text/plain':  # Fallback to plain text
+            if not body:  # Use plain only if HTML isn't found
+                body_encoded = part['body'].get('data')
+                body = part_decoder(body_encoded)
+
+        # Handle attachments
+        elif 'filename' in part and part['filename']:
+            attachment_id = part['body'].get('attachmentId')
+            filename = part['filename']
+            mime_type = part['mimeType']
+            attachments.append({'filename': filename, 'mimeType': mime_type, 'attachmentId': attachment_id})
+
+    # Process the payload
+    process_part(payload)
+    return body, attachments
+
+def message_to_json_data(ID, From, Date, Subject, body, ThreadID = None, In_Reply_To=None, References=None, Message_ID=None, Thread_Index=None, Thread_Topic=None):
+
+    JSON_Body = {
+        "ID": ID,
+        "ThreadID": ThreadID,
+        "In_Reply_To": In_Reply_To,
+        "References": References,
+        "Message_ID": Message_ID,
+        "Thread_Index": Thread_Index,
+        "Thread_Topic": Thread_Topic,
+        "From": From,
+        "Date": Date,
+        "Subject": Subject,
+        "Body": body,
+        
+    }
+
+    return JSON_Body
+
+def write_to_OPENAI(Json_Data):
+    ID = Json_Data["ID"]
+    ThreadID = Json_Data["ThreadID"]
+    In_Reply_To = Json_Data["In_Reply_To"]
+    References = Json_Data["References"]
+    From = Json_Data["From"]
+    Date = Json_Data["Date"]
+    Subject = Json_Data["Subject"]
+    body = Json_Data["Body"]
+    Message_ID = Json_Data["Message_ID"]
+    Thread_Index = Json_Data["Thread_Index"]
+    Thread_Topic = Json_Data["Thread_Topic"]
     
     try:
         result = call_openai_with_retry(prompt=body, max_retries=3, wait_time=5)
         total_tokens = result.usage.total_tokens
         approx_cost_usd = float(total_tokens / 1000) * 0.03  # Assuming a cost of $0.03 per 1000 tokens
         response = result.choices[0].message.content
+
         email_body = create_markdown_email_body(total_tokens, approx_cost_usd, response)
         print(f"Siunciame laiska i {extract_email(From)} tema: {Subject}, ")
-        send_html_email(global_user, "***REMOVED***", extract_email(From), Subject, email_body)
-        change_email_label(global_user, ID, ["UNREAD"], ["Label_7380834898592995778"])
+
+        try:
+            User = config.get_global_user()   
+            send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(From), subject=Subject, html_content=email_body,
+                             thread_id=ThreadID, in_reply_to=In_Reply_To, References=References, Message_ID=Message_ID, Thread_Index=Thread_Index, Thread_Topic=Thread_Topic)
+            change_email_label(User, ID, ["UNREAD"], ["Label_7380834898592995778"])
+            update_sender_statistics(sender_email=extract_email(From), cost=approx_cost_usd)
+
+            # ~~~~~~~~~~~ JSON ~~~~~~~~~~~
+            # Prepare JSON data from the message
+            json_data = message_to_json_data(ID=ID, ThreadID=ThreadID, From="***REMOVED***", Date=Date, Subject=Subject, body=email_body, In_Reply_To=In_Reply_To, References=References, 
+                                             Message_ID=Message_ID, Thread_Index=Thread_Index, Thread_Topic=Thread_Topic) 
+            #pirmiausiai pasirasem sau i |JSON| faila
+            write_json_data_to_json(json_data)
+
+        except Exception as e:
+            print(f"Error sending email: {e}")
 
     except OpenAI.error.Timeout as e:
         print("Request timed out.")
     except OpenAI.error.RateLimitError as e:
         print("Rate limit exceeded.")
 
-def call_openai_with_retry(prompt, max_retries=3, wait_time=5):
-    """
-    Calls OpenAI's API with a retry mechanism.
 
-    Args:
-        prompt (str): The input prompt for OpenAI.
-        max_retries (int): Maximum number of retries in case of failure.
-        wait_time (int): Wait time (in seconds) between retries.
+def test(User):
+    response = User.users().history().list(
+            userId='me',
+            startHistoryId=17893,
+            historyTypes=['messageAdded']
+            ).execute() # Gauna sarašąs pagal historyId
+    Meg_arr = []
+    for record in response['history']:
+        for message in record['messagesAdded']:
+            message['message']['id']
+            #print(message['message']['id'])
+            msg = User.users().messages().get(userId='me', id=message['message']['id']).execute()
+            Meg_arr.append(msg)
+            
+    #Create a function to evaluate and compare the headers of all mesages
+    def extract_headers(messages):
+        headers_dict = {}
+        for msg in messages:
+            for header in msg['payload']['headers']:
+                if header['name'] not in headers_dict:
+                    headers_dict[header['name']] = []
+                headers_dict[header['name']].append(header['value'])
+    
+        return headers_dict
+    
+    #check if the sender is aurimas.zvirblys@mil.lt
+    def check_sender(messages, target_email="Aurimas.Zvirblys@mil.lt"):
+        matching_messages = []
+        for msg in messages:
+            headers = msg['payload']['headers']
+            From = get_header_value(headers, "From")
+            sender_email = extract_email(From)
+            if sender_email == target_email:
+                matching_messages.append(msg)
+        return matching_messages
 
-    Returns:
-        str: The response from OpenAI.
-    """
-    for attempt in range(max_retries):
-        try:
-            print(f"Attempt {attempt + 1}...")
-            # Call OpenAI API
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            # If the call succeeds, return the response
-            return response
-
-        except Exception as e:
-            print(f"Error: {e}")
-            if attempt < max_retries - 1:
-                print(f"Retrying in {wait_time} seconds...")
-                time.sleep(wait_time)
-            else:
-                print("Max retries reached. Returning failure.")
-                raise  # Re-raise the exception after max retries
-
-# Funkcija sukurti el. laiško turinį Markdown formatu ir konvertuoti į HTML
-def create_markdown_email_body(total_tokens, approx_cost_usd, response):
-    """
-    Sukuria el. laiško turinį Markdown formatu, konvertuoja jį į HTML.
-    Args:
-        total_tokens (int): Naudotų tokenų skaičius.
-        approx_cost_usd (float): Apskaičiuota kaina USD.
-        response (str): API sugeneruotas atsakymas.
-
-    Returns:
-        str: HTML turinys paruoštas siuntimui.
-    """
-    # Markdown turinys
-    markdown_body = f"""
-# API Atsakymo Informacija
-
-- **Naudoti tokenai**: {total_tokens}
-- **Apskaičiuota kaina**: ${approx_cost_usd:.5f}
-
----
-
-## Atsakymas
-
-{response}
-    """
-    # Konvertuojame Markdown į HTML
-    return markdown2.markdown(markdown_body)
-
-# Funkcija siųsti HTML el. laišką
-def send_html_email(service, sender, recipient, subject, html_content):
-    """
-    Siunčia HTML formatu paruoštą el. laišką per Gmail API.
-
-    Args:
-        service: Autorizuotas Gmail API paslaugų objektas.
-        sender (str): Siuntėjo el. pašto adresas.
-        recipient (str): Gavėjo el. pašto adresas.
-        subject (str): Laiško tema.
-        html_content (str): Laiško turinys HTML formatu.
-
-    Returns:
-        dict: Gmail API atsakymas.
-    """
-    # Sukurkite MIMEText objektą su HTML turiniu
-    message = MIMEText(html_content, "html")
-    message["to"] = extract_email(recipient)
-    message["from"] = sender
-    message["subject"] = subject
-
-    # Kodavimas į Base64, kaip reikalauja Gmail API
-    raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
-    body = {"raw": raw_message}
-
-    try:
-        # Siųskite el. laišką
-        sent_message = service.users().messages().send(userId="me", body=body).execute()
-        print(f"El. laiškas sėkmingai išsiųstas! Žinutės ID: {sent_message['id']}, siuntėjas: {sender}, gavėjas: {extract_email(recipient)}, tema: {subject}")
-        return sent_message
-    except Exception as e:
-        print(f"Klaida siunčiant el. laišką: {e}")
-        return None
-
-def write_to_json(ID, From, Date, Subject, body):
-
-    JSON_Body = {
-        "ID": ID,
-        "From": From,
-        "Date": Date,
-        "Subject": Subject,
-        "Body": body
-    }
-
-    # Folder and file paths
-    folder_name = "emails"
-    file_name = Subject +".json"
-    file_path = os.path.join(folder_name, file_name)
-
-    # Ensure the folder exists
-    os.makedirs(folder_name, exist_ok=True)
-
-    # Step 1: Check if the file exists and load its content
-    if os.path.exists(file_path):
-        with open(file_path, 'r') as file:
-            try:
-                existing_data = json.load(file)
-            except json.JSONDecodeError:
-                existing_data = []  # Default to an empty list if the file is empty or invalid JSON
-    else:
-        existing_data = []
-
-    # Step 2: Ensure existing data is a list (for appending purposes)
-    if not isinstance(existing_data, list):
-        raise ValueError("The existing JSON content must be a list to append new items.")
-
-    # Step 3: Append the new data
-    existing_data.append(JSON_Body)
-
-    # Step 4: Write the updated data back to the file
-    with open(file_path, 'w') as file:
-        json.dump(existing_data, file, indent=4)
-               
-
-def get_label_id(service, label_name):
-    """
-    Fetches the label ID for the given label name.
-
-    Args:
-        service: Authorized Gmail API service instance.
-        label_name (str): The name of the label to fetch.
-
-    Returns:
-        str: The label ID, or None if not found.
-    """
-    try:
-        labels = service.users().labels().list(userId="me").execute().get("labels", [])
-        for label in labels:
-            if label["name"].lower() == label_name.lower():
-                return label["id"]
-    except Exception as e:
-        print(f"Error fetching label ID: {e}")
-    return None
-
-def change_email_label(service, message_id, remove_labels, add_labels):
-    """
-    Modifies the labels of an email.
-
-    Args:
-        service: Authorized Gmail API service instance.
-        message_id (str): The ID of the email to modify.
-        remove_labels (list): Labels to remove from the email.
-        add_labels (list): Labels to add to the email.
-
-    Returns:
-        dict: The Gmail API response.
-    """
-    try:
-        body = {
-            "removeLabelIds": remove_labels,
-            "addLabelIds": add_labels,
-        }
-        result = service.users().messages().modify(userId="me", id=message_id, body=body).execute()
-        print(f"Labels updated for message ID: {message_id}")
-        return result
-    except Exception as e:
-        print(f"Error modifying email labels: {e}")
-        return None
-
-def get_all_labels(service):
-    """
-    Retrieves all labels from the user's inbox.
-
-    Args:
-        service: Authorized Gmail API service instance.
-
-    Returns:
-        list: A list of labels in the user's inbox.
-    """
-    try:
-        labels = service.users().labels().list(userId="me").execute().get("labels", [])
-        print("Labels retrieved:")
-        for label in labels:
-            print(f"ID: {label['id']}, Name: {label['name']}")
-        return labels
-    except Exception as e:
-        print(f"Error retrieving labels: {e}")
-        return []
-
-
+    #matching_messages = check_sender(Meg_arr)
+    #print(Meg_arr)
 
 if __name__ == '__main__':
+    def run_server():
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    # Start Uvicorn server in a separate thread
+    server_thread = threading.Thread(target=run_server)
+    server_thread.daemon = True  # Allow program to exit even if thread is still running
+    server_thread.start()
+
     # Authenticate and read emails
     User = authenticate_gmail_as_User()
-    set_a_global_user(User)
-
-    '''
-    read_emails(User)
-    '''
-    #get_all_labels(User)
+    config.set_a_global_user(User)
     
-    # Path to the service account key file
-    service_account_key_path = "C:/Users/Auris/Python/LKGPT/skilful-mercury-444620-s6-2526f9ed3422.json"
+    # Path to the service account key fil
+    service_account_key_path = os.path.join("Creds", "skilful-mercury-444620-s6-2526f9ed3422.json")
     # Authenticate Gmail API
     service_account = authenticate_gmail_with_service_account(service_account_key_path)
 
@@ -608,8 +340,10 @@ if __name__ == '__main__':
     setup_watch(User, "projects/skilful-mercury-444620-s6/topics/LK-DI")
     # Start listening for notifications
     listen_for_notifications_with_service_account(
-        subscription_name="LK-DI-sub",
-        key_path=service_account_key_path,
-        service=User
-    )
+         subscription_name="LK-DI-sub",
+         key_path=service_account_key_path,
+         Userservice=User
+     )
+
+    
     

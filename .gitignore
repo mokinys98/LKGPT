@@ -1,15 +1,26 @@
 # ignore ALL .log files
 *.log
 
+# ignore ALL .json files
+*.json
+skilful-mercury-444620-s6-2526f9ed3422.json
+credentials.json
+token.json
+
+# ignore ALL .pyc files
+*.pyc
+
 # ignore ALL files in ANY directory named temp
 temp/
+emails/
+Creds/
+__pycache__/
 
 .env
 
-/emails
+#Ignote database
+sender_statistics.db
 
-token.json
-
-skilful-mercury-444620-s6-2526f9ed3422.json
-
-credentials.json
+Dockerfile
+.env
+.vscode/*
