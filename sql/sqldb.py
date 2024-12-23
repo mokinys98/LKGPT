@@ -137,6 +137,6 @@ if __name__ == '__main__':
     #view_all_entries("sender_statistics.db", "sender_statistics")
     data = test_connection(connect_to_supabase())
     data2 = sender_exists("Aurimas.Zvirblys@mil.lt")
-    update_sender_statistics("no-reply@google.com", 0.01)
+    
     print(data)
     print(data2)
