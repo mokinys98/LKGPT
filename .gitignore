@@ -8,7 +8,9 @@ credentials.json
 token.json
 
 # ignore ALL .pyc files
+__pycache__/
 *.pyc
+
 
 # Ignore everything inside folder1
 Emails/*
@@ -33,3 +35,4 @@ sender_statistics.db
 Dockerfile
 .env
 .vscode/*
+token_base64.txt
