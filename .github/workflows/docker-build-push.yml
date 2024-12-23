@@ -24,6 +24,8 @@ jobs:
           echo "${{ secrets.SKILFUL_MERCURY_444620 }}" > Creds/skilful-mercury-444620-s6-2526f9ed3422.json
           echo "${{ secrets.TOKEN }}" > Creds/token.json
 
+    - name: "Debug: List Creds directory"
+      run: ls -la Creds
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
