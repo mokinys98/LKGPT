@@ -13,13 +13,16 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
+    - name: Print current directory
+      run: pwd
+    
     # Decode and create files dynamically
     - name: Create JSON files
       run: |
-          mkdir -p /Creds
-          echo "${{ secrets.CREDENTIALS }}" > /Creds/credentials.json
-          echo "${{ secrets.SKILFUL_MERCURY_444620 }}" > /Creds/skilful-mercury-444620-s6-2526f9ed3422.json
-          echo "${{ secrets.TOKEN }}" > /Creds/token.json
+          mkdir -p Creds
+          echo "${{ secrets.CREDENTIALS }}" > Creds/credentials.json
+          echo "${{ secrets.SKILFUL_MERCURY_444620 }}" > Creds/skilful-mercury-444620-s6-2526f9ed3422.json
+          echo "${{ secrets.TOKEN }}" > Creds/token.json
 
 
     - name: Set up Docker Buildx
