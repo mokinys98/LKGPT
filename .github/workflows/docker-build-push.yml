@@ -24,17 +24,12 @@ jobs:
           echo "${{ secrets.SKILFUL_MERCURY_444620 }}" > Creds/skilful-mercury-444620-s6-2526f9ed3422.json
           echo "${{ secrets.TOKEN }}" > Creds/token.json
 
+
+    - name: Print directory tree
+      run: tree -L 3
+        
     - name: "Debug: List Creds directory"
       run: ls -la Creds
-
-    - name: "Debug: Print credentials.json"
-      run: cat Creds/credentials.json
-
-    - name: "Debug: Print skilful-mercury-444620-s6-2526f9ed3422.json"
-      run: cat Creds/skilful-mercury-444620-s6-2526f9ed3422.json
-
-    - name: "Debug: Print token.json"
-      run: cat Creds/token.json
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
