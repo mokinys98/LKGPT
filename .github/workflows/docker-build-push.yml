@@ -22,8 +22,7 @@ jobs:
           mkdir -p Creds
           echo "${{ secrets.CREDENTIALS }}" > Creds/credentials.json
           echo "${{ secrets.SKILFUL_MERCURY_444620 }}" > Creds/skilful-mercury-444620-s6-2526f9ed3422.json
-          echo "${{ secrets.TOKEN }}" > | base64 --decode > Creds/token.json
-
+          echo "${{ secrets.TOKEN }}" | base64 --decode > Creds/token.json
 
     - name: Print directory tree
       run: tree -L 3
