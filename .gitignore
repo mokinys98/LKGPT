@@ -10,9 +10,18 @@ token.json
 # ignore ALL .pyc files
 *.pyc
 
+# Ignore everything inside folder1
+Emails/*
+
+# Allow specific files in folder1
+!Emails/Email_labels.py
+!Emails/Email_processing.py
+!Emails/Email_send_to.py
+!Emails/Gmail_auth.py
+!Emails/__init__.py
+
 # ignore ALL files in ANY directory named temp
 temp/
-emails/
 Creds/
 __pycache__/
 

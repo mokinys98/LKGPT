@@ -47,7 +47,7 @@ def write_json_data_to_json(JSON_Body):
     cleaned_subject = Subject.split(':', 1)[-1].strip() if ':' in Subject else Subject
 
     # Folder and file paths
-    folder_name = "emails"
+    folder_name = "Emails"
     file_name = sanitize_file_name(cleaned_subject) +".json"
     file_path = os.path.join(folder_name, file_name)
 
