@@ -334,6 +334,7 @@ if __name__ == '__main__':
     # Path to the service account key fil
     service_account_key_path = os.path.join("Creds", "skilful-mercury-444620-s6-2526f9ed3422.json")
     # Authenticate Gmail API
+    print(service_account_key_path)
     service_account = authenticate_gmail_with_service_account(service_account_key_path)
 
     # Example usage:
