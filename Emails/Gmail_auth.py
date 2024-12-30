@@ -15,9 +15,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 
 
-
-
-
 # Scopes for reading Gmail messages
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
