@@ -36,3 +36,4 @@ Dockerfile
 .env
 .vscode/*
 token_base64.txt
+sensitive-replace.txt
