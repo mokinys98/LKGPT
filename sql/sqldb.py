@@ -8,13 +8,13 @@ import os
 def initialize_supabase():
     url: str = os.environ.get("SUPABASE_URL")
     key: str = os.environ.get("SERVICE_ROLE_KEY")
-    supabase: Client = create_client(url, key)
-    return supabase
+    initialize_supabase: Client = create_client(url, key)
+    return initialize_supabase
 
 # Connect to Supabase
 def connect_to_supabase():
-    supabase = initialize_supabase()
-    return supabase
+    connected_supabase = initialize_supabase()
+    return connected_supabase
 
 # Test connection: Fetch data from a table
 def test_connection(supabase):
@@ -131,8 +131,7 @@ def send_email_info(history_id, json_data):
 if __name__ == '__main__':
     
     # Authenticate and retrieve the current user's UUID
-    #session = supabase.auth.sign_in_with_password({"email": "***REMOVED***", "password": "***REMOVED***"})
-    #print(session.user.id)  # Prints the user's UUID
+    
 
     #view_all_entries("sender_statistics.db", "sender_statistics")
     data = test_connection(connect_to_supabase())

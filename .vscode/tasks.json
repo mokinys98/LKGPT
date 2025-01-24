@@ -1,0 +1,43 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "1 Build",
+            "type": "shell",
+            "command": "docker",
+            "args": [
+                "build",
+                "-t",
+                "lkgpt-api-v3:latest",
+                "."
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "Builds a Docker image with a custom tag."
+        },
+        {
+            "label": "2 Tag",
+            "type": "shell",
+            "command": "docker",
+            "args": [
+                "tag",
+                "lkgpt-api-v3:latest",
+                "mokinys98/lkgpt-api-v3:latest"
+            ],
+            "detail": "Tags the Docker image for pushing to a registry."
+        },
+        {
+            "label": "3 Push",
+            "type": "shell",
+            "command": "docker",
+            "args": [
+                "push",
+                "mokinys98/lkgpt-api-v3:latest"
+            ],
+            "detail": "Pushes the tagged Docker image to the registry.",
+            "problemMatcher": []
+        },
+    ]
+}

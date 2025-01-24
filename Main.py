@@ -12,6 +12,7 @@ from googleapiclient.errors import HttpError
 from Emails.Gmail_auth import authenticate_gmail_as_User, authenticate_gmail_with_service_account
 from PubSub.pubsub_notifications import setup_watch, listen_for_notifications_with_service_account
 from Helpers.utils import extract_email, get_header_value, decode_message
+from Helpers.Time_Updater import update_database_entry  # Correct import for the function
 from outmethods import write_json_data_to_json
 from API.openai_integration import call_openai_with_retry
 
@@ -115,7 +116,7 @@ def process_new_emails(service, history_id):
                             email_body = create_greeting_email()
                             try:
                                 User = config.get_global_user()   
-                                send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(sender_email), subject="Sveiki!", html_content=email_body)
+                                send_html_email(service=User, sender="lkdirbtinisintelektas@gmail.com", recipient=extract_email(sender_email), subject="Sveiki!", html_content=email_body)
                                 create_entry(sender_email)
                                 continue
                             except Exception as e:
@@ -258,14 +259,14 @@ def write_to_OPENAI(Json_Data):
 
         try:
             User = config.get_global_user()   
-            send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(From), subject=Subject, html_content=email_body,
+            send_html_email(service=User, sender="lkdirbtinisintelektas@gmail.com", recipient=extract_email(From), subject=Subject, html_content=email_body,
                              thread_id=ThreadID, in_reply_to=In_Reply_To, References=References, Message_ID=Message_ID, Thread_Index=Thread_Index, Thread_Topic=Thread_Topic)
             change_email_label(User, ID, ["UNREAD"], ["Label_7380834898592995778"])
             update_sender_statistics(sender_email=extract_email(From), cost=approx_cost_usd)
 
             # ~~~~~~~~~~~ JSON ~~~~~~~~~~~
             # Prepare JSON data from the message
-            json_data = message_to_json_data(ID=ID, ThreadID=ThreadID, From="***REMOVED***", Date=Date, Subject=Subject, body=email_body, In_Reply_To=In_Reply_To, References=References, 
+            json_data = message_to_json_data(ID=ID, ThreadID=ThreadID, From="lkdirbtinisintelektas@gmail.com", Date=Date, Subject=Subject, body=email_body, In_Reply_To=In_Reply_To, References=References, 
                                              Message_ID=Message_ID, Thread_Index=Thread_Index, Thread_Topic=Thread_Topic) 
             #pirmiausiai pasirasem sau i |JSON| faila
             write_json_data_to_json(json_data)
@@ -321,6 +322,10 @@ def test(User):
 if __name__ == '__main__':
     def run_server():
         uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    # Start the database updater as a separate thread
+    updater_thread = threading.Thread(target=update_database_entry, daemon=True)
+    updater_thread.start()
 
     # Start Uvicorn server in a separate thread
     server_thread = threading.Thread(target=run_server)

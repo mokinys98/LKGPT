@@ -100,14 +100,14 @@ def test_write_to_OPENAI(Json_Data):
         try:
 
             User = config.get_global_user()   
-            #send_html_email(service=User, sender="***REMOVED***", recipient=extract_email(From), subject=Subject, html_content=email_body,
+            #send_html_email(service=User, sender="lkdirbtinisintelektas@gmail.com", recipient=extract_email(From), subject=Subject, html_content=email_body,
             #                 thread_id=ThreadID, in_reply_to=In_Reply_To, references=References)
             change_email_label(User, ID, ["UNREAD"], ["Label_7380834898592995778"])
             #update_sender_statistics(sender_email=extract_email(From), cost=approx_cost_usd)
 
             # ~~~~~~~~~~~ JSON ~~~~~~~~~~~
             # Prepare JSON data from the message
-            json_data = test_message_to_json_data(ID=ID, ThreadID=ThreadID, From="***REMOVED***", Date=Date, Subject=Subject, body=email_body, In_Reply_To=In_Reply_To, References=References) 
+            json_data = test_message_to_json_data(ID=ID, ThreadID=ThreadID, From="lkdirbtinisintelektas@gmail.com", Date=Date, Subject=Subject, body=email_body, In_Reply_To=In_Reply_To, References=References) 
             #pirmiausiai pasirasem sau i |JSON| faila
             #write_json_data_to_json(json_data)
 
